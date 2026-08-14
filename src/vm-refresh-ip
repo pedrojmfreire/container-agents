@@ -1,0 +1,305 @@
+#!/bin/bash
+set -e
+
+# Author: Pedro Freire www.pedrofreire.com
+# Co-author: OpenAI Codex
+# License: MIT
+
+
+# User-defined script configuration
+# NOTE: If ~/dev-env.sh exists, its values override what's defined here
+# ===========================================================================
+
+VM_HOST_DEFAULT=vm.local
+
+
+# Override local configuration with ~/dev-env.sh
+# ===========================================================================
+
+if [[ -f "$HOME/dev-env.sh" ]]
+then
+	. "$HOME/dev-env.sh"
+
+	VM_HOST_DEFAULT="${DEV_ENV_VM_HOST:-$VM_HOST_DEFAULT}"
+fi
+
+
+# Command-line arguments and Constants
+# ===========================================================================
+
+VM_HOST="${1:-$VM_HOST_DEFAULT}"
+HOSTS_FILE="/etc/hosts"
+
+
+# Functions
+# ===========================================================================
+
+get_current_vm_ip()
+{
+    awk -v host="$VM_HOST" '
+        /^[[:space:]]*#/ { next }
+
+        {
+            for (i = 2; i <= NF; i++) {
+                if ($i == host) {
+                    print $1
+                    exit
+                }
+            }
+        }
+    ' "$HOSTS_FILE"
+}
+
+
+get_vm_hostnames()
+{
+    local current_ip="$1"
+
+    awk -v ip="$current_ip" '
+        /^[[:space:]]*#/ { next }
+
+        $1 == ip {
+            for (i = 2; i <= NF; i++)
+                printf "%s%s", (count++ ? " " : ""), $i
+        }
+
+        END {
+            if (count)
+                printf "\n"
+        }
+    ' "$HOSTS_FILE"
+}
+
+
+get_vm_subnet()
+{
+    local ip="$1"
+
+    awk -F. '
+        NF == 4 {
+            printf "%s.%s.%s", $1, $2, $3
+            exit
+        }
+    ' <<< "$ip"
+}
+
+
+get_vm_fingerprint()
+{
+    local fingerprint
+
+    fingerprint="$(
+        ssh-keygen -F "$VM_HOST" 2>/dev/null |
+            grep -v '^#' |
+            ssh-keygen -lf - 2>/dev/null |
+            awk 'NR == 1 { print $2 }'
+    )"
+
+    if [[ -z "$fingerprint" ]]; then
+        echo "ERROR: No SSH host key found for ${VM_HOST} in ~/.ssh/known_hosts." >&2
+        return 1
+    fi
+
+    echo "$fingerprint"
+}
+
+
+find_vm_ip()
+{
+    local expected_fingerprint="$1"
+    local subnet="$2"
+    local tmp
+    local count
+
+    tmp="$(mktemp)"
+
+    #
+    # Probe the current /24 subnet concurrently.
+    #
+    # Failures are expected: almost every address will either have no host
+    # or no SSH server. Therefore each background probe explicitly succeeds.
+    #
+    for i in {1..254}; do
+        (
+            ip="${subnet}.${i}"
+
+            fingerprint="$(
+                ssh-keyscan -T 1 "$ip" 2>/dev/null |
+                    ssh-keygen -lf - 2>/dev/null |
+                    awk -v expected="$expected_fingerprint" '
+                        $2 == expected {
+                            print $2
+                            exit
+                        }
+                    '
+            )" || true
+
+            if [[ "$fingerprint" == "$expected_fingerprint" ]]; then
+                echo "$ip" >> "$tmp"
+            fi
+
+            exit 0
+        ) &
+    done
+
+    #
+    # Individual probes failing is normal.
+    #
+    wait || true
+
+    count="$(wc -l < "$tmp" | tr -d ' ')"
+
+    if [[ "$count" -eq 0 ]]; then
+        rm -f "$tmp"
+        return 1
+    fi
+
+    if [[ "$count" -gt 1 ]]; then
+        echo "ERROR: SSH host key matched multiple IP addresses:" >&2
+        cat "$tmp" >&2
+        rm -f "$tmp"
+        return 1
+    fi
+
+    cat "$tmp"
+    rm -f "$tmp"
+}
+
+
+update_hosts()
+{
+    local old_ip="$1"
+    local new_ip="$2"
+    local hostnames="$3"
+    local tmp
+    local backup
+
+    tmp="$(mktemp)"
+
+    #
+    # Remove all /etc/hosts lines associated with the VM's old IP.
+    #
+    awk -v ip="$old_ip" '
+        $1 != ip { print }
+    ' "$HOSTS_FILE" > "$tmp"
+
+    #
+    # Append the same hostnames using the VM's new IP.
+    #
+    printf '\n%s\t%s\n' "$new_ip" "$hostnames" >> "$tmp"
+
+    backup="/etc/hosts.backup.$(date +%Y%m%d-%H%M%S)"
+
+    echo
+    echo "Current VM entry:"
+    echo "    ${old_ip}    ${hostnames}"
+
+    echo
+    echo "New VM entry:"
+    echo "    ${new_ip}    ${hostnames}"
+    echo
+
+    echo "Backing up ${HOSTS_FILE} to ${backup}..."
+    sudo cp -p "$HOSTS_FILE" "$backup"
+
+    echo "Updating ${HOSTS_FILE}... (sudo required)"
+    sudo sudo cp "$tmp" "$HOSTS_FILE"
+
+    rm -f "$tmp"
+}
+
+
+# Main
+# ===========================================================================
+
+echo "Usage:"
+echo "    $(basename "$0") [<vm-host>]"
+echo
+echo "Current VM host: ${VM_HOST}"
+
+#
+# Determine the currently configured VM IP from /etc/hosts.
+#
+VM_IP_CURRENT="$(get_current_vm_ip)"
+
+if [[ -z "$VM_IP_CURRENT" ]]; then
+    echo "ERROR: Could not find ${VM_HOST} in ${HOSTS_FILE}." >&2
+    exit 1
+fi
+
+#
+# Derive the subnet from the current address.
+#
+VM_SUBNET="$(get_vm_subnet "$VM_IP_CURRENT")"
+
+if [[ -z "$VM_SUBNET" ]]; then
+    echo "ERROR: Could not determine subnet from ${VM_IP_CURRENT}." >&2
+    exit 1
+fi
+
+#
+# Find all hostnames currently associated with that IP.
+#
+VM_HOSTNAMES="$(get_vm_hostnames "$VM_IP_CURRENT")"
+
+if [[ -z "$VM_HOSTNAMES" ]]; then
+    echo "ERROR: Could not find hostnames associated with ${VM_IP_CURRENT}." >&2
+    exit 1
+fi
+
+echo
+echo "Current configuration:"
+echo "    IP:     ${VM_IP_CURRENT}"
+echo "    Subnet: ${VM_SUBNET}.0/24"
+echo "    Hosts:  ${VM_HOSTNAMES}"
+
+#
+# Retrieve the SSH fingerprint previously trusted for VM_HOST.
+#
+echo
+echo "Getting trusted SSH fingerprint for ${VM_HOST}..."
+
+VM_SSH_FINGERPRINT="$(get_vm_fingerprint)"
+
+echo "    ${VM_SSH_FINGERPRINT}"
+
+#
+# Search the subnet for a server presenting that same SSH host key.
+#
+echo
+echo "Searching ${VM_SUBNET}.0/24..."
+
+if ! VM_IP_NEW="$(find_vm_ip "$VM_SSH_FINGERPRINT" "$VM_SUBNET")"; then
+    echo "ERROR: Could not find ${VM_HOST} on ${VM_SUBNET}.0/24." >&2
+    exit 1
+fi
+
+echo "Found ${VM_HOST} at ${VM_IP_NEW}."
+
+#
+# Nothing to do if DHCP has not changed the address.
+#
+if [[ "$VM_IP_NEW" == "$VM_IP_CURRENT" ]]; then
+    echo
+    echo "${HOSTS_FILE} is already correct. Nothing to change."
+    exit 0
+fi
+
+#
+# Replace every /etc/hosts entry using the old VM IP with one entry
+# containing the same hostnames and the newly discovered IP.
+#
+update_hosts "$VM_IP_CURRENT" "$VM_IP_NEW" "$VM_HOSTNAMES"
+
+#
+# Flush macOS name-resolution caches.
+#
+sudo dscacheutil -flushcache
+sudo killall -HUP mDNSResponder 2>/dev/null || true
+
+echo
+echo "Done."
+echo
+echo "Old IP: ${VM_IP_CURRENT}"
+echo "New IP: ${VM_IP_NEW}"
+echo "Hosts:  ${VM_HOSTNAMES}"

@@ -1,0 +1,12 @@
+backup */
+**/.DS_Store
+
+# Runtime state is supplied by the volume mounts. Keeping it out of the image
+# reduces size and avoids baking session/auth/log data into the image.
+\!local/share/opencode/auth.json
+\!local/share/opencode/log/
+\!local/share/opencode/opencode.db
+\!local/share/opencode/opencode.db-*
+\!local/share/opencode/snapshot/
+\!local/share/opencode/storage/session_diff/
+\!local/state/opencode/locks/
