@@ -303,7 +303,12 @@ fi
 # Define the data mount volumes and working dir for the AI agent
 # ===========================================================================
 
-CONTAINER_WORKSPACE="/home/agent${WORKSPACE#"$HOME"}"
+if [[ "$WORKSPACE" != /home/root/*  &&  "$WORKSPACE" != /home/agent/* ]]
+then
+	CONTAINER_WORKSPACE="${WORKSPACE}"
+else
+	CONTAINER_WORKSPACE="/home/agent${WORKSPACE#"$HOME"}"
+fi
 
 if ! $is_whitelisted
 then
@@ -409,6 +414,9 @@ fi
 # Start the AI agent's container
 # ===========================================================================
 
+tty_args=(-i)
+[[ -t 0  &&  -t 1 ]]  &&  tty_args+=(-t)
+
 case $agent_container in
 
 	"agent-claude")
@@ -421,7 +429,7 @@ case $agent_container in
 				--volume "$HOME/.ssh/known_hosts_agents:/home/agent/.ssh/known_hosts:ro"
 				)
 		fi
-		exec container run -it --rm                           \
+		exec container run "${tty_args[@]}" --rm              \
 			--cpus 2 --memory 4G                              \
 			--progress none                                   \
 			"${volumes[@]}"                                   \
@@ -447,7 +455,7 @@ case $agent_container in
 				--volume "$HOME/.ssh/known_hosts_agents:/home/agent/.ssh/known_hosts:ro"
 				)
 		fi
-		exec container run -it --rm                           \
+		exec container run "${tty_args[@]}" --rm              \
 			--cpus 2 --memory 4G                              \
 			--progress none                                   \
 			"${volumes[@]}"                                   \
@@ -471,7 +479,7 @@ case $agent_container in
 				--volume "$HOME/.ssh/known_hosts_agents:/home/agent/.ssh/known_hosts:ro"
 				)
 		fi
-		exec container run -it --rm                           \
+		exec container run "${tty_args[@]}" --rm              \
 			--cpus 2 --memory 4G                              \
 			--progress none                                   \
 			"${volumes[@]}"                                   \
@@ -495,7 +503,7 @@ case $agent_container in
 				--volume "$HOME/.ssh/known_hosts_agents:/home/agent/.ssh/known_hosts:ro"
 				)
 		fi
-		exec container run -it --rm                           \
+		exec container run "${tty_args[@]}" --rm              \
 			--cpus 2 --memory 4G                              \
 			--progress none                                   \
 			"${volumes[@]}"                                   \
@@ -519,7 +527,7 @@ case $agent_container in
 				--volume "$HOME/.ssh/known_hosts_agents:/home/agent/.ssh/known_hosts:ro"
 				)
 		fi
-		exec container run -it --rm                           \
+		exec container run "${tty_args[@]}" --rm              \
 			--cpus 2 --memory 4G                              \
 			--progress none                                   \
 			"${volumes[@]}"                                   \
@@ -543,7 +551,7 @@ case $agent_container in
 				--volume "$HOME/.ssh/known_hosts_agents:/home/agent/.ssh/known_hosts:ro"
 				)
 		fi
-		exec container run -it --rm                           \
+		exec container run "${tty_args[@]}" --rm              \
 			--cpus 2 --memory 4G                              \
 			--progress none                                   \
 			"${volumes[@]}"                                   \
