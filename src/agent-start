@@ -49,6 +49,9 @@ fi
 # Constants
 # ===========================================================================
 
+AGENT_USER="$USER"
+AGENT_HOME="$HOME"
+
 SSH_SOCKET="/tmp/agent-start-vm-tunnel.$UID.sock"
 DNS_ALIAS_LIST="/tmp/agent-start-dns-alias.$UID.txt"
 
@@ -303,18 +306,13 @@ fi
 # Define the data mount volumes and working dir for the AI agent
 # ===========================================================================
 
-if [[ "$WORKSPACE" != /home/root/*  &&  "$WORKSPACE" != /home/agent/* ]]
-then
-	CONTAINER_WORKSPACE="${WORKSPACE}"
-else
-	CONTAINER_WORKSPACE="/home/agent${WORKSPACE#"$HOME"}"
-fi
+CONTAINER_WORKSPACE="$AGENT_HOME${WORKSPACE#"$HOME"}"
 
 if ! $is_whitelisted
 then
 
-	volumes=(--volume "$WORKSPACE:/home/agent/workspace")
-	workdir=/home/agent/workspace
+	volumes=(--volume "$WORKSPACE:$AGENT_HOME/workspace")
+	workdir=$AGENT_HOME/workspace
 
 elif $is_single_project
 then
@@ -332,7 +330,7 @@ else  # ! $is_single_project
 	volumes=()
 	for whitelist_dir in "${PROJECT_WHITELIST[@]}"
 	do
-		container_dir="/home/agent${whitelist_dir#"$HOME"}"
+		container_dir="$AGENT_HOME${whitelist_dir#"$HOME"}"
 		volumes+=(--volume "$whitelist_dir:$container_dir")
 	done
 	workdir="$CONTAINER_WORKSPACE"
@@ -423,19 +421,19 @@ case $agent_container in
 		if $has_ssh_access
 		then
 			volumes+=(
-				--volume "$HOME/.ssh/ssh-agent-claude.pem:/home/agent/.ssh/ssh-agent-claude.pem:ro"
-				--volume "$HOME/.ssh/ssh-agent-claude.pem.pub:/home/agent/.ssh/ssh-agent-claude.pem.pub:ro"
-				--volume "$HOME/.ssh/config-agent-claude:/home/agent/.ssh/config:ro"
-				--volume "$HOME/.ssh/known_hosts_agents:/home/agent/.ssh/known_hosts:ro"
+				--volume "$HOME/.ssh/ssh-agent-claude.pem:$AGENT_HOME/.ssh/ssh-agent-claude.pem:ro"
+				--volume "$HOME/.ssh/ssh-agent-claude.pem.pub:$AGENT_HOME/.ssh/ssh-agent-claude.pem.pub:ro"
+				--volume "$HOME/.ssh/config-agent-claude:$AGENT_HOME/.ssh/config:ro"
+				--volume "$HOME/.ssh/known_hosts_agents:$AGENT_HOME/.ssh/known_hosts:ro"
 				)
 		fi
 		exec container run "${tty_args[@]}" --rm              \
 			--cpus 2 --memory 4G                              \
 			--progress none                                   \
 			"${volumes[@]}"                                   \
-			--volume "$HOME/Documents/Corebase/Software/Workspaces/Containers/Claude/!claude:/home/agent/.claude"  \
-			--volume "$HOME/Documents/Corebase/Software/Workspaces/Containers/Claude/!claude.json:/home/agent/.claude.json"  \
-			--volume "$HOME/Documents/Corebase/Software/Workspaces/Containers/Claude/!config:/home/agent/.config"  \
+			--volume "$HOME/Documents/Corebase/Software/Workspaces/Containers/Claude/!claude:$AGENT_HOME/.claude"  \
+			--volume "$HOME/Documents/Corebase/Software/Workspaces/Containers/Claude/!claude.json:$AGENT_HOME/.claude.json"  \
+			--volume "$HOME/Documents/Corebase/Software/Workspaces/Containers/Claude/!config:$AGENT_HOME/.config"  \
 			--workdir "$workdir"                              \
 			--env LOCALHOST_DNS_ALIAS="$LOCALHOST_DNS_ALIAS"  \
 			--env LOCALHOST_IP_ALIAS="$LOCALHOST_IP_ALIAS"    \
@@ -449,17 +447,17 @@ case $agent_container in
 		if $has_ssh_access
 		then
 			volumes+=(
-				--volume "$HOME/.ssh/ssh-agent-codex.pem:/home/agent/.ssh/ssh-agent-codex.pem:ro"
-				--volume "$HOME/.ssh/ssh-agent-codex.pem.pub:/home/agent/.ssh/ssh-agent-codex.pem.pub:ro"
-				--volume "$HOME/.ssh/config-agent-codex:/home/agent/.ssh/config:ro"
-				--volume "$HOME/.ssh/known_hosts_agents:/home/agent/.ssh/known_hosts:ro"
+				--volume "$HOME/.ssh/ssh-agent-codex.pem:$AGENT_HOME/.ssh/ssh-agent-codex.pem:ro"
+				--volume "$HOME/.ssh/ssh-agent-codex.pem.pub:$AGENT_HOME/.ssh/ssh-agent-codex.pem.pub:ro"
+				--volume "$HOME/.ssh/config-agent-codex:$AGENT_HOME/.ssh/config:ro"
+				--volume "$HOME/.ssh/known_hosts_agents:$AGENT_HOME/.ssh/known_hosts:ro"
 				)
 		fi
 		exec container run "${tty_args[@]}" --rm              \
 			--cpus 2 --memory 4G                              \
 			--progress none                                   \
 			"${volumes[@]}"                                   \
-			--volume "$HOME/Documents/Corebase/Software/Workspaces/Containers/Codex/!codex:/home/agent/.codex"  \
+			--volume "$HOME/Documents/Corebase/Software/Workspaces/Containers/Codex/!codex:$AGENT_HOME/.codex"  \
 			--workdir "$workdir"                              \
 			--env LOCALHOST_DNS_ALIAS="$LOCALHOST_DNS_ALIAS"  \
 			--env LOCALHOST_IP_ALIAS="$LOCALHOST_IP_ALIAS"    \
@@ -473,17 +471,17 @@ case $agent_container in
 		if $has_ssh_access
 		then
 			volumes+=(
-				--volume "$HOME/.ssh/ssh-agent-gemini.pem:/home/agent/.ssh/ssh-agent-gemini.pem:ro"
-				--volume "$HOME/.ssh/ssh-agent-gemini.pem.pub:/home/agent/.ssh/ssh-agent-gemini.pem.pub:ro"
-				--volume "$HOME/.ssh/config-agent-gemini:/home/agent/.ssh/config:ro"
-				--volume "$HOME/.ssh/known_hosts_agents:/home/agent/.ssh/known_hosts:ro"
+				--volume "$HOME/.ssh/ssh-agent-gemini.pem:$AGENT_HOME/.ssh/ssh-agent-gemini.pem:ro"
+				--volume "$HOME/.ssh/ssh-agent-gemini.pem.pub:$AGENT_HOME/.ssh/ssh-agent-gemini.pem.pub:ro"
+				--volume "$HOME/.ssh/config-agent-gemini:$AGENT_HOME/.ssh/config:ro"
+				--volume "$HOME/.ssh/known_hosts_agents:$AGENT_HOME/.ssh/known_hosts:ro"
 				)
 		fi
 		exec container run "${tty_args[@]}" --rm              \
 			--cpus 2 --memory 4G                              \
 			--progress none                                   \
 			"${volumes[@]}"                                   \
-			--volume "$HOME/Documents/Corebase/Software/Workspaces/Containers/Antigravity/!gemini:/home/agent/.gemini"  \
+			--volume "$HOME/Documents/Corebase/Software/Workspaces/Containers/Antigravity/!gemini:$AGENT_HOME/.gemini"  \
 			--workdir "$workdir"                              \
 			--env LOCALHOST_DNS_ALIAS="$LOCALHOST_DNS_ALIAS"  \
 			--env LOCALHOST_IP_ALIAS="$LOCALHOST_IP_ALIAS"    \
@@ -497,17 +495,17 @@ case $agent_container in
 		if $has_ssh_access
 		then
 			volumes+=(
-				--volume "$HOME/.ssh/ssh-agent-gemini.pem:/home/agent/.ssh/ssh-agent-gemini.pem:ro"
-				--volume "$HOME/.ssh/ssh-agent-gemini.pem.pub:/home/agent/.ssh/ssh-agent-gemini.pem.pub:ro"
-				--volume "$HOME/.ssh/config-agent-gemini:/home/agent/.ssh/config:ro"
-				--volume "$HOME/.ssh/known_hosts_agents:/home/agent/.ssh/known_hosts:ro"
+				--volume "$HOME/.ssh/ssh-agent-gemini.pem:$AGENT_HOME/.ssh/ssh-agent-gemini.pem:ro"
+				--volume "$HOME/.ssh/ssh-agent-gemini.pem.pub:$AGENT_HOME/.ssh/ssh-agent-gemini.pem.pub:ro"
+				--volume "$HOME/.ssh/config-agent-gemini:$AGENT_HOME/.ssh/config:ro"
+				--volume "$HOME/.ssh/known_hosts_agents:$AGENT_HOME/.ssh/known_hosts:ro"
 				)
 		fi
 		exec container run "${tty_args[@]}" --rm              \
 			--cpus 2 --memory 4G                              \
 			--progress none                                   \
 			"${volumes[@]}"                                   \
-			--volume "$HOME/Documents/Corebase/Software/Workspaces/Containers/Gemini/!gemini:/home/agent/.gemini"  \
+			--volume "$HOME/Documents/Corebase/Software/Workspaces/Containers/Gemini/!gemini:$AGENT_HOME/.gemini"  \
 			--workdir "$workdir"                              \
 			--env LOCALHOST_DNS_ALIAS="$LOCALHOST_DNS_ALIAS"  \
 			--env LOCALHOST_IP_ALIAS="$LOCALHOST_IP_ALIAS"    \
@@ -521,17 +519,17 @@ case $agent_container in
 		if $has_ssh_access
 		then
 			volumes+=(
-				--volume "$HOME/.ssh/ssh-agent-vibe.pem:/home/agent/.ssh/ssh-agent-vibe.pem:ro"
-				--volume "$HOME/.ssh/ssh-agent-vibe.pem.pub:/home/agent/.ssh/ssh-agent-vibe.pem.pub:ro"
-				--volume "$HOME/.ssh/config-agent-vibe:/home/agent/.ssh/config:ro"
-				--volume "$HOME/.ssh/known_hosts_agents:/home/agent/.ssh/known_hosts:ro"
+				--volume "$HOME/.ssh/ssh-agent-vibe.pem:$AGENT_HOME/.ssh/ssh-agent-vibe.pem:ro"
+				--volume "$HOME/.ssh/ssh-agent-vibe.pem.pub:$AGENT_HOME/.ssh/ssh-agent-vibe.pem.pub:ro"
+				--volume "$HOME/.ssh/config-agent-vibe:$AGENT_HOME/.ssh/config:ro"
+				--volume "$HOME/.ssh/known_hosts_agents:$AGENT_HOME/.ssh/known_hosts:ro"
 				)
 		fi
 		exec container run "${tty_args[@]}" --rm              \
 			--cpus 2 --memory 4G                              \
 			--progress none                                   \
 			"${volumes[@]}"                                   \
-			--volume "$HOME/Documents/Corebase/Software/Workspaces/Containers/Vibe/!vibe:/home/agent/.vibe"  \
+			--volume "$HOME/Documents/Corebase/Software/Workspaces/Containers/Vibe/!vibe:$AGENT_HOME/.vibe"  \
 			--workdir "$workdir"                              \
 			--env LOCALHOST_DNS_ALIAS="$LOCALHOST_DNS_ALIAS"  \
 			--env LOCALHOST_IP_ALIAS="$LOCALHOST_IP_ALIAS"    \
@@ -545,18 +543,18 @@ case $agent_container in
 		if $has_ssh_access
 		then
 			volumes+=(
-				--volume "$HOME/.ssh/ssh-agent-opencode.pem:/home/agent/.ssh/ssh-agent-opencode.pem:ro"
-				--volume "$HOME/.ssh/ssh-agent-opencode.pem.pub:/home/agent/.ssh/ssh-agent-opencode.pem.pub:ro"
-				--volume "$HOME/.ssh/config-agent-opencode:/home/agent/.ssh/config:ro"
-				--volume "$HOME/.ssh/known_hosts_agents:/home/agent/.ssh/known_hosts:ro"
+				--volume "$HOME/.ssh/ssh-agent-opencode.pem:$AGENT_HOME/.ssh/ssh-agent-opencode.pem:ro"
+				--volume "$HOME/.ssh/ssh-agent-opencode.pem.pub:$AGENT_HOME/.ssh/ssh-agent-opencode.pem.pub:ro"
+				--volume "$HOME/.ssh/config-agent-opencode:$AGENT_HOME/.ssh/config:ro"
+				--volume "$HOME/.ssh/known_hosts_agents:$AGENT_HOME/.ssh/known_hosts:ro"
 				)
 		fi
 		exec container run "${tty_args[@]}" --rm              \
 			--cpus 2 --memory 4G                              \
 			--progress none                                   \
 			"${volumes[@]}"                                   \
-			--volume "$HOME/Documents/Corebase/Software/Workspaces/Containers/OpenCode/!config:/home/agent/.config"  \
-			--volume "$HOME/Documents/Corebase/Software/Workspaces/Containers/OpenCode/!local:/home/agent/.local"  \
+			--volume "$HOME/Documents/Corebase/Software/Workspaces/Containers/OpenCode/!config:$AGENT_HOME/.config"  \
+			--volume "$HOME/Documents/Corebase/Software/Workspaces/Containers/OpenCode/!local:$AGENT_HOME/.local"  \
 			--workdir "$workdir"                              \
 			--env LOCALHOST_DNS_ALIAS="$LOCALHOST_DNS_ALIAS"  \
 			--env LOCALHOST_IP_ALIAS="$LOCALHOST_IP_ALIAS"    \
@@ -577,5 +575,5 @@ esac
 #	--cpus 2 --memory 4G \
 #	--publish 127.0.0.1:1234:1234    \
 #	--volume "$WORKSPACE:/workspace" \
-#	--mount "type=bind,source=$HOME/Downloads,target=/home/agent/Downloads,readonly" \
+#	--mount "type=bind,source=$HOME/Downloads,target=$AGENT_HOME/Downloads,readonly" \
 #	--user agent

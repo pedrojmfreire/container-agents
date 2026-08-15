@@ -15,7 +15,10 @@ fi
 
 cp -f ../bootstrap-hosts.sh .
 
-container build --no-cache -t agent-antigravity .
+container build --no-cache --tag agent-antigravity  \
+	--build-arg AGENT_USER="$USER"                  \
+	--build-arg AGENT_HOME="$HOME"                  \
+	.
 
 rm ./bootstrap-hosts.sh
 

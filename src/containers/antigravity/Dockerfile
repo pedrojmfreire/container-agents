@@ -1,5 +1,9 @@
 FROM almalinux:10-minimal
 
+ARG AGENT_USER
+ARG AGENT_HOME
+
+
 RUN microdnf -y update                                         && \
     microdnf -y install shadow-utils                           && \
     microdnf -y install git openssh-clients                    && \
@@ -18,19 +22,19 @@ RUN microdnf -y update                                         && \
 	# Add tools required for your development,
 	# that may need to be invoked by the agent
 
-RUN useradd -m -s /bin/bash agent
+RUN useradd -m -s /bin/bash -d "$AGENT_HOME" "$AGENT_USER"
 
-ENV PATH="/home/agent/.local/bin:$PATH"
-ENV NPM_CONFIG_PREFIX=/home/agent/.npm-global
-ENV PATH="/home/agent/.npm-global/bin:/home/agent/node_modules/.bin:$PATH"
+ENV PATH="$AGENT_HOME/.local/bin:$PATH"
+ENV NPM_CONFIG_PREFIX="$AGENT_HOME/.npm-global"
+ENV PATH="$AGENT_HOME/.npm-global/bin:$AGENT_HOME/node_modules/.bin:$PATH"
 
-RUN mkdir -p             /home/agent/.npm-global /home/agent/.npm  && \
-    chown -R agent:agent /home/agent/.npm-global /home/agent/.npm
+RUN mkdir -p                           $AGENT_HOME/.npm-global $AGENT_HOME/.npm  &&  \
+    chown -R "$AGENT_USER:$AGENT_USER" $AGENT_HOME/.npm-global $AGENT_HOME/.npm
 
-USER agent
-WORKDIR /home/agent
+USER "$AGENT_USER"
+WORKDIR "$AGENT_HOME"
 
-COPY --chown=agent:agent !gemini /home/agent/.gemini
+COPY --chown="$AGENT_USER:$AGENT_USER"  "!gemini"  "$AGENT_HOME/.gemini"
 
 RUN curl -fsSL https://antigravity.google/cli/install.sh | bash -  && \
     npm cache clean --force

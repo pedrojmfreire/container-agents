@@ -15,6 +15,9 @@ fi
 
 cp -f ../bootstrap-hosts.sh .
 
-container build --no-cache -t agent-vibe .
+container build --no-cache --tag agent-vibe  \
+	--build-arg AGENT_USER="$USER"           \
+	--build-arg AGENT_HOME="$HOME"           \
+	.
 
 rm ./bootstrap-hosts.sh

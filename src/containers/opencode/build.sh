@@ -15,6 +15,9 @@ fi
 
 cp -f ../bootstrap-hosts.sh .
 
-container build --no-cache -t agent-opencode .
+container build --no-cache --tag agent-opencode  \
+	--build-arg AGENT_USER="$USER"               \
+	--build-arg AGENT_HOME="$HOME"               \
+	.
 
 rm ./bootstrap-hosts.sh

@@ -29,4 +29,24 @@ fi
 # Run the actual default command (CMD)
 # ===========================================================================
 
-exec setpriv --reuid=agent --regid=agent --init-groups env HOME=/home/agent USER=agent LOGNAME=agent "$@"
+home_dir=""
+
+for dir in /Users/*/ /home/*/
+do
+	[[ "$dir" == "/home/root/" ]]  &&  continue
+	home_dir="${dir%/}"
+	break
+done
+
+AGENT_HOME="${home_dir:-/home/agent}"
+AGENT_USER="${AGENT_HOME##*/}"
+
+exec setpriv               \
+	--reuid="$AGENT_USER"  \
+	--regid="$AGENT_USER"  \
+	--init-groups          \
+	env                    \
+	HOME="$AGENT_HOME"     \
+	USER="$AGENT_USER"     \
+	LOGNAME="$AGENT_USER"  \
+	"$@"
