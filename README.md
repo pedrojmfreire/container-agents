@@ -358,7 +358,7 @@ Use this sample JSON with JetBrains' IDEs to invoke OpenCode in a container:
   "agent_servers": {
     "OpenCode in container": {
       "command":"/<path-to->/opencode",
-      "args": ["---raw", "acp"]
+      "args": ["---safe", "acp"]
     }
   }
 }
