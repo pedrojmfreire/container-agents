@@ -1,8 +1,8 @@
 #!/bin/bash
 set -e
 
-# Author: Pedro Freire www.pedrofreire.com
-# License: MIT
+# Author:  Pedro Freire  http://www.pedrofreire.com
+# License: Apache 2.0    https://www.apache.org/licenses/LICENSE-2.0.txt
 
 
 # User-defined script configuration
@@ -10,9 +10,11 @@ set -e
 # ===========================================================================
 
 # In these host directories, AI agents run with no restrictions
-PROJECT_WHITELIST=(
+PROJECT_DIRS=(
 	"$HOME/Documents/Software"
 )
+
+CONTAINERS_DIR="./src/containers"
 
 LOCALHOST_DNS_ALIAS=host.container.internal
 LOCALHOST_IP_ALIAS=203.0.113.113
@@ -35,7 +37,9 @@ if [[ -f "$HOME/dev-env.sh" ]]
 then
 	. "$HOME/dev-env.sh"
 
-	((${#DEV_ENV_PROJECTS[@]}))  &&  PROJECT_WHITELIST=("${DEV_ENV_PROJECTS[@]}")
+	((${#DEV_ENV_PROJECT_DIRS[@]}))  &&  PROJECT_DIRS=("${DEV_ENV_PROJECT_DIRS[@]}")
+
+	CONTAINERS_DIR="${DEV_ENV_CONTAINERS_DIR:-$CONTAINERS_DIR}"
 
 	LOCALHOST_DNS_ALIAS="${DEV_ENV_LOCALHOST_DNS_ALIAS:-$LOCALHOST_DNS_ALIAS}"
 	LOCALHOST_IP_ALIAS="${DEV_ENV_LOCALHOST_IP_ALIAS:-$LOCALHOST_IP_ALIAS}"
@@ -81,6 +85,11 @@ do
 				--permission-mode bypassPermissions  \
 				--dangerously-skip-permissions       \
 			)
+			agent_homedirs=(
+				"$HOME/.claude"               "$CONTAINERS_DIR/claude/!claude"
+				"$HOME/.claude.json"          "$CONTAINERS_DIR/claude/!claude.json"
+				"$HOME/.config/ccstatusline"  "$CONTAINERS_DIR/claude/!config/ccstatusline"
+			)
 			;;
 		".codex"|".chatgpt")
 			agent_container=agent-codex
@@ -93,6 +102,9 @@ do
 				--sandbox danger-full-access                \
 				--dangerously-bypass-approvals-and-sandbox  \
 			)
+			agent_homedirs=(
+				"$HOME/.codex"  "$CONTAINERS_DIR/codex/!codex"
+			)
 			;;
 		".antigravity")
 			agent_container=agent-antigravity
@@ -101,6 +113,9 @@ do
 			agent_exec=agy
 			agent_args=()
 			agent_args_unsafe=(--dangerously-skip-permissions)
+			agent_homedirs=(
+				"$HOME/.gemini"  "$CONTAINERS_DIR/antigravity/!gemini"
+			)
 			;;
 		".gemini")
 			agent_container=agent-gemini
@@ -109,6 +124,9 @@ do
 			agent_exec=gemini
 			agent_args=()
 			agent_args_unsafe=(--yolo)
+			agent_homedirs=(
+				"$HOME/.gemini"  "$CONTAINERS_DIR/gemini/!gemini"
+			)
 			;;
 		".vibe"|".mistral"|".mistral-vibe")
 			agent_container=agent-vibe
@@ -121,6 +139,9 @@ do
 			agent_exec=vibe
 			agent_args=()
 			agent_args_unsafe=(--yolo)
+			agent_homedirs=(
+				"$HOME/.vibe"  "$CONTAINERS_DIR/vibe/!vibe"
+			)
 			;;
 		".opencode"|".open-code"|".oc")
 			agent_container=agent-opencode
@@ -129,20 +150,23 @@ do
 			agent_exec=opencode
 			agent_args=()
 			agent_args_unsafe=(--auto)
+			agent_homedirs=(
+				"$HOME/.cache/opencode"        "$CONTAINERS_DIR/opencode/!cache/opencode"
+				"$HOME/.config/opencode"       "$CONTAINERS_DIR/opencode/!config/opencode"
+				"$HOME/.local/state/opencode"  "$CONTAINERS_DIR/opencode/!local/state/opencode"
+				"$HOME/.local/share/opencode"  "$CONTAINERS_DIR/opencode/!local/share/opencode"
+				"$HOME/.local/share/opentui"   "$CONTAINERS_DIR/opencode/!local/share/opentui"
+			)
 			;;
 		".-h"|".--help")
 			script_name="$(basename "$0")"
-			if [ "$script_name" = "agent-start" ]
-			then
-				usage_agent=" <agent>"
-			else
-				usage_agent=""
-			fi
+			usage_agent=" <agent>"
+			[ "$script_name" = "agent-start" ]  &&  usage_agent=""
 			echo
 			echo "Usage:"
 			echo "    $script_name$usage_agent [<options>, ...] [-|-- [<agent-option>, ...]]"
 			echo
-			echo "Agents:"
+			echo "Supported agents:"
 			echo "  claude"
 			echo "  codex"
 			echo "  antigravity, agy"
@@ -151,7 +175,7 @@ do
 			echo "  opencode"
 			echo
 			echo "Options:"
-			echo "  -a,  --all          Map all project dirs (\$PROJECT_WHITELIST) to allow the agent to work across"
+			echo "  -a,  --all          Map all project dirs (\$PROJECT_DIRS) to allow the agent to work across"
 			echo "                      projects."
 			echo "  -s,  --sh           Run the container shell, not the agent itself."
 			echo "       --ssh          Map ~/.ssh/* files to allow the agent to access to servers/Virtual Machines."
@@ -170,6 +194,8 @@ do
 			echo "                      (${VM_PORTS[*]})."
 			echo "       --vm-del       Close the SSH tunnel created by --vm, and exit. Does not do a --local-del."
 			echo "  -c,  --connect      Combined --ssh, --local and --vm."
+			# TODO: Make the soft-linking of $HOME directories, optional? Wait for feedback.
+			# echo "       --link         Link '$CONTAINERS_DIR/<agent>/!*' to ~/.config, ~/.local, etc. and exit."
 			echo
 			echo "All -l, --local, --vm also create DNS aliases inside the container, that match host /etc/hosts DNS"
 			echo "aliases pointing to 127.0.0.1 or the VM's '$VM_HOST' IP. All DNS aliases inside the container will"
@@ -209,6 +235,7 @@ do
 			has_host_localhost_access=true
 			;;
 		".--vm-"|".--vm-del"|".--vm-close")
+			# TODO: Review using "container system dns ..." no earlier than 2027, to evaluate it against copying /etc/hosts
 			# This is failing (2026-08), likely due to bugs:
 			# https://github.com/apple/container/issues/817
 			# https://github.com/apple/container/issues/1794
@@ -282,7 +309,7 @@ fi
 # ===========================================================================
 
 is_whitelisted=false
-for whitelist_dir in "${PROJECT_WHITELIST[@]}"
+for whitelist_dir in "${PROJECT_DIRS[@]}"
 do
 	if [[ "$WORKSPACE" == "$whitelist_dir" || "$WORKSPACE" == "$whitelist_dir/"* ]]
 	then
@@ -328,7 +355,7 @@ else  # ! $is_single_project
 	#	../../another_project/...
 
 	volumes=()
-	for whitelist_dir in "${PROJECT_WHITELIST[@]}"
+	for whitelist_dir in "${PROJECT_DIRS[@]}"
 	do
 		container_dir="$AGENT_HOME${whitelist_dir#"$HOME"}"
 		volumes+=(--volume "$whitelist_dir:$container_dir")
@@ -342,6 +369,7 @@ fi
 # ===========================================================================
 if $has_vm_access
 then
+	# TODO: Review using "container system dns ..." no earlier than 2027, to evaluate it against copying /etc/hosts
 	# This is failing (2026-08), likely due to bugs:
 	# https://github.com/apple/container/issues/817
 	# https://github.com/apple/container/issues/1794
@@ -400,13 +428,28 @@ then
 	then
 		VM_IP=$(awk "\$2 == \"$VM_HOST\" {print \$1}" /etc/hosts)
 		awk "{ sub(/#.*/, \"\"); if (\$1 == \"127.0.0.1\" || \$1 == \"$VM_IP\") for (i=2;i<=NF;i++) print \$i }" /etc/hosts \
-			| grep -vE '^(localhost|localhost\.localdomain|broadcasthost)$' > "$DNS_ALIAS_LIST"
+			| grep -vE "^(localhost|localhost\.localdomain|broadcasthost|$LOCALHOST_DNS_ALIAS)\$" > "$DNS_ALIAS_LIST"
 	fi
 fi
 if [ -f "$DNS_ALIAS_LIST" ]
 then
 	volumes+=(--volume "$DNS_ALIAS_LIST:/etc/host-aliases.txt")
 fi
+
+
+# Soft-link all configuration directories to $HOME
+# ===========================================================================
+
+for ((i=0; i<${#agent_homedirs[@]}; i+=2))
+do
+    homedir="${agent_homedirs[i]}"
+    containerdir="${agent_homedirs[i+1]}"
+
+    if [[ -e "$containerdir" && ! -e "$homedir" ]]
+    then
+        ln -s "$containerdir" "$homedir"
+    fi
+done
 
 
 # Start the AI agent's container
@@ -427,19 +470,19 @@ case $agent_container in
 				--volume "$HOME/.ssh/known_hosts_agents:$AGENT_HOME/.ssh/known_hosts:ro"
 				)
 		fi
-		exec container run "${tty_args[@]}" --rm              \
-			--cpus 2 --memory 4G                              \
-			--progress none                                   \
-			"${volumes[@]}"                                   \
-			--volume "$HOME/Documents/Corebase/Software/Workspaces/Containers/Claude/!claude:$AGENT_HOME/.claude"  \
-			--volume "$HOME/Documents/Corebase/Software/Workspaces/Containers/Claude/!claude.json:$AGENT_HOME/.claude.json"  \
-			--volume "$HOME/Documents/Corebase/Software/Workspaces/Containers/Claude/!config:$AGENT_HOME/.config"  \
-			--workdir "$workdir"                              \
-			--env LOCALHOST_DNS_ALIAS="$LOCALHOST_DNS_ALIAS"  \
-			--env LOCALHOST_IP_ALIAS="$LOCALHOST_IP_ALIAS"    \
-			--env COLORTERM                                   \
-			--env TERM                                        \
-			"${agent_env[@]}"                                 \
+		exec container run "${tty_args[@]}" --rm                                     \
+			--cpus 2 --memory 4G                                                     \
+			--progress none                                                          \
+			"${volumes[@]}"                                                          \
+			--volume "$CONTAINERS_DIR/claude/!claude:$AGENT_HOME/.claude"            \
+			--volume "$CONTAINERS_DIR/claude/!claude.json:$AGENT_HOME/.claude.json"  \
+			--volume "$CONTAINERS_DIR/claude/!config:$AGENT_HOME/.config"            \
+			--workdir "$workdir"                                                     \
+			--env LOCALHOST_DNS_ALIAS="$LOCALHOST_DNS_ALIAS"                         \
+			--env LOCALHOST_IP_ALIAS="$LOCALHOST_IP_ALIAS"                           \
+			--env COLORTERM                                                          \
+			--env TERM                                                               \
+			"${agent_env[@]}"                                                        \
 			"$agent_container" "$agent_exec" "$@" "${agent_args[@]}"
 		;;
 
@@ -453,17 +496,17 @@ case $agent_container in
 				--volume "$HOME/.ssh/known_hosts_agents:$AGENT_HOME/.ssh/known_hosts:ro"
 				)
 		fi
-		exec container run "${tty_args[@]}" --rm              \
-			--cpus 2 --memory 4G                              \
-			--progress none                                   \
-			"${volumes[@]}"                                   \
-			--volume "$HOME/Documents/Corebase/Software/Workspaces/Containers/Codex/!codex:$AGENT_HOME/.codex"  \
-			--workdir "$workdir"                              \
-			--env LOCALHOST_DNS_ALIAS="$LOCALHOST_DNS_ALIAS"  \
-			--env LOCALHOST_IP_ALIAS="$LOCALHOST_IP_ALIAS"    \
-			--env COLORTERM                                   \
-			--env TERM                                        \
-			"${agent_env[@]}"                                 \
+		exec container run "${tty_args[@]}" --rm                        \
+			--cpus 2 --memory 4G                                        \
+			--progress none                                             \
+			"${volumes[@]}"                                             \
+			--volume "$CONTAINERS_DIR/codex/!codex:$AGENT_HOME/.codex"  \
+			--workdir "$workdir"                                        \
+			--env LOCALHOST_DNS_ALIAS="$LOCALHOST_DNS_ALIAS"            \
+			--env LOCALHOST_IP_ALIAS="$LOCALHOST_IP_ALIAS"              \
+			--env COLORTERM                                             \
+			--env TERM                                                  \
+			"${agent_env[@]}"                                           \
 			"$agent_container" "$agent_exec" "$@" "${agent_args[@]}"
 		;;
 
@@ -477,17 +520,17 @@ case $agent_container in
 				--volume "$HOME/.ssh/known_hosts_agents:$AGENT_HOME/.ssh/known_hosts:ro"
 				)
 		fi
-		exec container run "${tty_args[@]}" --rm              \
-			--cpus 2 --memory 4G                              \
-			--progress none                                   \
-			"${volumes[@]}"                                   \
-			--volume "$HOME/Documents/Corebase/Software/Workspaces/Containers/Antigravity/!gemini:$AGENT_HOME/.gemini"  \
-			--workdir "$workdir"                              \
-			--env LOCALHOST_DNS_ALIAS="$LOCALHOST_DNS_ALIAS"  \
-			--env LOCALHOST_IP_ALIAS="$LOCALHOST_IP_ALIAS"    \
-			--env COLORTERM                                   \
-			--env TERM                                        \
-			"${agent_env[@]}"                                 \
+		exec container run "${tty_args[@]}" --rm                                \
+			--cpus 2 --memory 4G                                                \
+			--progress none                                                     \
+			"${volumes[@]}"                                                     \
+			--volume "$CONTAINERS_DIR/antigravity/!gemini:$AGENT_HOME/.gemini"  \
+			--workdir "$workdir"                                                \
+			--env LOCALHOST_DNS_ALIAS="$LOCALHOST_DNS_ALIAS"                    \
+			--env LOCALHOST_IP_ALIAS="$LOCALHOST_IP_ALIAS"                      \
+			--env COLORTERM                                                     \
+			--env TERM                                                          \
+			"${agent_env[@]}"                                                   \
 			"$agent_container" "$agent_exec" "$@" "${agent_args[@]}"
 		;;
 
@@ -501,17 +544,17 @@ case $agent_container in
 				--volume "$HOME/.ssh/known_hosts_agents:$AGENT_HOME/.ssh/known_hosts:ro"
 				)
 		fi
-		exec container run "${tty_args[@]}" --rm              \
-			--cpus 2 --memory 4G                              \
-			--progress none                                   \
-			"${volumes[@]}"                                   \
-			--volume "$HOME/Documents/Corebase/Software/Workspaces/Containers/Gemini/!gemini:$AGENT_HOME/.gemini"  \
-			--workdir "$workdir"                              \
-			--env LOCALHOST_DNS_ALIAS="$LOCALHOST_DNS_ALIAS"  \
-			--env LOCALHOST_IP_ALIAS="$LOCALHOST_IP_ALIAS"    \
-			--env COLORTERM                                   \
-			--env TERM                                        \
-			"${agent_env[@]}"                                 \
+		exec container run "${tty_args[@]}" --rm                           \
+			--cpus 2 --memory 4G                                           \
+			--progress none                                                \
+			"${volumes[@]}"                                                \
+			--volume "$CONTAINERS_DIR/gemini/!gemini:$AGENT_HOME/.gemini"  \
+			--workdir "$workdir"                                           \
+			--env LOCALHOST_DNS_ALIAS="$LOCALHOST_DNS_ALIAS"               \
+			--env LOCALHOST_IP_ALIAS="$LOCALHOST_IP_ALIAS"                 \
+			--env COLORTERM                                                \
+			--env TERM                                                     \
+			"${agent_env[@]}"                                              \
 			"$agent_container" "$agent_exec" "$@" "${agent_args[@]}"
 		;;
 
@@ -525,17 +568,17 @@ case $agent_container in
 				--volume "$HOME/.ssh/known_hosts_agents:$AGENT_HOME/.ssh/known_hosts:ro"
 				)
 		fi
-		exec container run "${tty_args[@]}" --rm              \
-			--cpus 2 --memory 4G                              \
-			--progress none                                   \
-			"${volumes[@]}"                                   \
-			--volume "$HOME/Documents/Corebase/Software/Workspaces/Containers/Vibe/!vibe:$AGENT_HOME/.vibe"  \
-			--workdir "$workdir"                              \
-			--env LOCALHOST_DNS_ALIAS="$LOCALHOST_DNS_ALIAS"  \
-			--env LOCALHOST_IP_ALIAS="$LOCALHOST_IP_ALIAS"    \
-			--env COLORTERM                                   \
-			--env TERM                                        \
-			"${agent_env[@]}"                                 \
+		exec container run "${tty_args[@]}" --rm                     \
+			--cpus 2 --memory 4G                                     \
+			--progress none                                          \
+			"${volumes[@]}"                                          \
+			--volume "$CONTAINERS_DIR/vibe/!vibe:$AGENT_HOME/.vibe"  \
+			--workdir "$workdir"                                     \
+			--env LOCALHOST_DNS_ALIAS="$LOCALHOST_DNS_ALIAS"         \
+			--env LOCALHOST_IP_ALIAS="$LOCALHOST_IP_ALIAS"           \
+			--env COLORTERM                                          \
+			--env TERM                                               \
+			"${agent_env[@]}"                                        \
 			"$agent_container" "$agent_exec" "$@" "${agent_args[@]}"
 		;;
 
@@ -549,18 +592,19 @@ case $agent_container in
 				--volume "$HOME/.ssh/known_hosts_agents:$AGENT_HOME/.ssh/known_hosts:ro"
 				)
 		fi
-		exec container run "${tty_args[@]}" --rm              \
-			--cpus 2 --memory 4G                              \
-			--progress none                                   \
-			"${volumes[@]}"                                   \
-			--volume "$HOME/Documents/Corebase/Software/Workspaces/Containers/OpenCode/!config:$AGENT_HOME/.config"  \
-			--volume "$HOME/Documents/Corebase/Software/Workspaces/Containers/OpenCode/!local:$AGENT_HOME/.local"  \
-			--workdir "$workdir"                              \
-			--env LOCALHOST_DNS_ALIAS="$LOCALHOST_DNS_ALIAS"  \
-			--env LOCALHOST_IP_ALIAS="$LOCALHOST_IP_ALIAS"    \
-			--env COLORTERM                                   \
-			--env TERM                                        \
-			"${agent_env[@]}"                                 \
+		exec container run "${tty_args[@]}" --rm                             \
+			--cpus 2 --memory 4G                                             \
+			--progress none                                                  \
+			"${volumes[@]}"                                                  \
+			--volume "$CONTAINERS_DIR/opencode/!cache:$AGENT_HOME/.cache"    \
+			--volume "$CONTAINERS_DIR/opencode/!config:$AGENT_HOME/.config"  \
+			--volume "$CONTAINERS_DIR/opencode/!local:$AGENT_HOME/.local"    \
+			--workdir "$workdir"                                             \
+			--env LOCALHOST_DNS_ALIAS="$LOCALHOST_DNS_ALIAS"                 \
+			--env LOCALHOST_IP_ALIAS="$LOCALHOST_IP_ALIAS"                   \
+			--env COLORTERM                                                  \
+			--env TERM                                                       \
+			"${agent_env[@]}"                                                \
 			"$agent_container" "$agent_exec" "$@" "${agent_args[@]}"
 		;;
 
@@ -569,11 +613,3 @@ case $agent_container in
 		exit 1
 		;;
 esac
-
-
-# exec container run -it --rm \
-#	--cpus 2 --memory 4G \
-#	--publish 127.0.0.1:1234:1234    \
-#	--volume "$WORKSPACE:/workspace" \
-#	--mount "type=bind,source=$HOME/Downloads,target=$AGENT_HOME/Downloads,readonly" \
-#	--user agent

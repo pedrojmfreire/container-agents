@@ -1,6 +1,9 @@
 #!/bin/bash
 set -e
 
+# Author:  Pedro Freire  http://www.pedrofreire.com
+# License: Apache 2.0    https://www.apache.org/licenses/LICENSE-2.0.txt
+
 
 # User-defined script configuration
 # ===========================================================================

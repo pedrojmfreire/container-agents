@@ -3,9 +3,13 @@ set -e
 
 
 # In these host directories, AI agents run with no restrictions
-DEV_ENV_PROJECTS=(
+DEV_ENV_PROJECT_DIRS=(
 	"$HOME/Documents/Software"
 )
+
+
+# Base directory for container settings
+DEV_ENV_CONTAINERS_DIR="./src/containers"
 
 
 DEV_ENV_LOCALHOST_DNS_ALIAS=host.container.internal

@@ -1,7 +1,7 @@
 # Container-Agents
 
 Are you a proud macOS 26+ user on Apple Silicon wanting to run
-[Apple Containers](https://github.com/apple/container)
+[Apple Container](https://github.com/apple/container)
 to sandbox your AI agents?
 Then this project is for you.
 
@@ -22,9 +22,11 @@ claude
 ```
 
 Two major advantages in the second launch, though:
-- Claude Code will only have access to files and directories inside `project`
-- Claude Code (optionally) runs with `--dangerously-skip-permissions` and
-  therefore it asks no permissions before making changes to files.
+- Claude Code will **only** have access to files and directories inside `project`,
+  under the exact same absolute path.
+- If "project" is a configured project directory, Claude Code runs with
+  `--dangerously-skip-permissions` and therefore asks no permissions before
+  making changes to files.
 
 Safer. Faster.
 
@@ -34,21 +36,28 @@ Safer. Faster.
 This project assumes coding agents are useful enough to deserve real tools, and
 powerful enough to deserve boundaries.
 
-By default, the current directory is the only project mount. Inside trusted
-project paths, agents get their normal autonomous flags because that is where you
-expect them to work. SSH, host-localhost access, and VM access are opt-in per
-invocation. Images are disposable, and sensitive runtime state stays on the host
-in explicit mounts.
+By default, the current directory is the only project mount, using the exact same
+absolute path in the container, as the host.
+As a precaution, if the current directory is your home (`~`) or main documents root
+(`~/Documents`), the script will ask you if you're really trying to share
+all your documents with the agent.
 
-That combination is what makes the workflow pleasant: agents can do serious
-engineering work without getting a free pass to your whole Mac.
+Inside trusted project paths, agents get their normal autonomous flags
+(e.g., `--dangerously-skip-permissions`) because that is where you
+expect them to work. Host-localhost access and VM access are opt-in.
+Per-agent-SSH is opt-in per invocation.
+Images are disposable, but the agent's configuration and state is persisted
+across invocations via explicit mounts.
+
+That combination is what removes hesitation from an AI workflow:
+agents can do serious engineering work without getting a free pass to your whole Mac.
 
 
-### MCP Servers
+### MCP Servers and Plugins
 
-Container-Agents supports the MCP configuration you prefer: just be sure to
-edit the sample `Dockerfile` for your agent, to ensure your favorite setup
-is pre-installed on the container.
+Container-Agents supports the MCP configuration and plugins you prefer:
+just be sure to  edit the sample `Dockerfile` for your agent, to ensure
+your favorite setup is pre-installed on the container.
 
 You can also have the container talk to MCP servers hosted on the Internet,
 as usual, or to MCP servers running on the local host.
@@ -61,20 +70,21 @@ inside the container, but the fixed memory limit of a container isn't well
 suited for a large memory footprint service such as such an LLM platform.
 
 Container-Agents supports connecting its agents to LLM platforms running
-in the local host.
+in the local host. Learn more about option `--local`.
 
 
 ### Development and Staging
 
 Container-Agents (optionally) supports connecting its agents to virtual machines running on
 the local host, and to map agent-specific SSH configuration with the container.
+Learn more about options `--vm` and `--ssh`.
 
 
 ## Quick Start
 
 ### Requirements
 
-- macOS with Apple Container installed and working.
+- macOS with [Apple Container](https://github.com/apple/container) installed and working.
 - Enough local resources for the default container run settings:
   `--cpus 2 --memory 4G`.
 - Agent credentials or login state for whichever CLI you want to use.
@@ -112,8 +122,8 @@ claude
 antigravity
 agy
 gemini
-opencode
 vibe
+opencode
 ```
 
 The wrappers are tiny scripts that all delegate to `src/agent-start`. You can
@@ -131,9 +141,12 @@ can be overridden with `~/dev-env.sh`. This repository includes `dev-env.sh` as 
 template:
 
 ```bash
-DEV_ENV_PROJECTS=(
+DEV_ENV_PROJECT_DIRS=(
     "$HOME/Documents/Software"
 )
+
+# Base directory for container settings
+DEV_ENV_CONTAINERS_DIR="./src/containers"
 
 DEV_ENV_LOCALHOST_DNS_ALIAS=host.container.internal
 DEV_ENV_LOCALHOST_IP_ALIAS=203.0.113.113
@@ -143,11 +156,11 @@ DEV_ENV_VM_HOST=vm.local
 DEV_ENV_VM_PORTS=(22 80 443)
 ```
 
-The most important setting is `PROJECT_WHITELIST`/`DEV_ENV_PROJECTS`.
+The most important setting is `PROJECT_DIRS`/`DEV_ENV_PROJECT_DIRS`.
 When your current directory is
 inside one of those paths, `agent-start` considers it trusted and enables the
 agent's unsafe or fully-autonomous flags. **Outside those paths, only the current
-directory is mounted at `/home/agent/workspace`, and the unsafe flags are not
+directory is mounted at `<agent-home>/workspace`, and the unsafe flags are not
 added**.
 
 Runtime CLI configuration is mounted per agent in `src/agent-start`. Adjust those
@@ -189,7 +202,7 @@ codex --help
 Usage:
     agent-start <agent> [<options>, ...] [-|-- [<agent-option>, ...]]
 
-Agents:
+Supported agents:
   claude
   codex
   antigravity, agy
@@ -198,7 +211,7 @@ Agents:
   opencode
 
 Options:
-  -a,  --all          Map all project dirs ($PROJECT_WHITELIST) to allow the agent to work across
+  -a,  --all          Map all project dirs ($PROJECT_DIRS) to allow the agent to work across
                       projects.
   -s,  --sh           Run the container shell, not the agent itself.
        --ssh          Map ~/.ssh/* files to allow the agent to access to servers/Virtual Machines.
@@ -230,26 +243,36 @@ Pass options to the agent:
 
 ## Features
 
-- Runs popular AI coding CLIs in Apple Containers:
+- **Runs popular AI coding CLIs in Apple Containers**:
     - OpenAI Codex / ChatGPT CLI
     - Claude Code
     - Google Gemini CLI
     - Google Antigravity CLI
     - Mistral Vibe
     - OpenCode
-- Mounts only the current project by default.
+- Mounts only the current directory by default.
 - **Enables full agent permissions only inside trusted project directories**.
 - Optionally mounts all configured project roots so agents can work across
   related repositories.
-- Optionally mounts agent-specific SSH keys and known hosts.
+- Optionally mounts **agent-specific SSH keys and known hosts**.
 - Optionally exposes host `localhost` to containers through a stable DNS alias,
   useful for Ollama, LM Studio, local model servers, web apps, databases, and
   other development services.
 - Optionally creates SSH tunnels to a host VM — required for VM "Shared Networking"
+- Automatic support for ACP via auto-detection of TTY.
 - Keeps runtime auth/session/log state out of images; the images contain tools
-  and starter config, while live state comes from host mounts.
+  and starter config, while state is persisted across invocations via mounts.
+- Soft-links persisted state with their expected locations in `~`.
 - Uses small wrapper scripts, so daily use can be as simple as `codex` from the
   directory you already work in.
+
+
+### Agent User Name+Home Matching Host
+
+Each agent's `Dockerfile` creates a specific OS user for the agent to run under.
+This user has the same name and home directory as the user you're running under
+in macOS -- thereby ensuring matching absolute paths between host and container,
+making it easier to share configuration and files between both.
 
 
 ### Accessing the Host's localhost
@@ -315,6 +338,31 @@ separate from your normal host SSH setup and makes it easier to revoke or rotate
 It also ensures all agent actions on the server(s) are traceable.
 
 
+### Configuration Sharing with Host Agents
+
+Some IDEs (e.g.: Visual Studio Code, JetBrains' IDEs) may install local copies
+of your agents.
+To have the configuration of such agents in sync with their container version,
+while you experiment, this project soft-links the agent-relevant `~/config`,
+`~/.local`, etc files to the main `src/containers/<agent>/!*` locations.
+
+
+### ACP Support
+
+Use this sample JSON with JetBrain's IDEs to invoke OpenCode in a container:
+
+```json
+{ "default_mcp_settings": {},
+  "agent_servers": {
+    "OpenCode in container": {
+      "command":"/usr/local/bin/opencode",
+      "args": ["--", "acp"]
+    }
+  }
+}
+```
+
+
 ## Sample Container Images
 
 Found in `src/containers`.
@@ -350,3 +398,9 @@ To add tools that your agents commonly need, edit the relevant Dockerfile under
    variables, executable, safe arguments, and unsafe arguments.
 5. Add a container-run block with any agent-specific config and SSH mounts.
 6. Rebuild and test with `--sh` before running the agent normally.
+
+## Author & License
+
+Author:  [Pedro Freire](http://www.pedrofreire.com)
+
+License: [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0.txt)
