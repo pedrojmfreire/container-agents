@@ -9,6 +9,7 @@ DEV_ENV_PROJECT_DIRS=(
 
 
 # Base directory for container settings
+# Note: This should be an absolute path! Replace before running!
 DEV_ENV_CONTAINERS_DIR="./src/containers"
 
 

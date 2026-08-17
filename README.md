@@ -49,14 +49,14 @@ Per-agent-SSH is opt-in per invocation.
 Images are disposable, but the agent's configuration and state is persisted
 across invocations via explicit mounts.
 
-That combination is what removes hesitation from an AI workflow:
+That combination removes hesitation from an AI workflow:
 agents can do serious engineering work without getting a free pass to your whole Mac.
 
 
 ### MCP Servers and Plugins
 
 Container-Agents supports the MCP configuration and plugins you prefer:
-just be sure to  edit the sample `Dockerfile` for your agent, to ensure
+just be sure to edit the sample `Dockerfile` for your agent, to ensure
 your favorite setup is pre-installed on the container.
 
 You can also have the container talk to MCP servers hosted on the Internet,
@@ -67,7 +67,7 @@ as usual, or to MCP servers running on the local host.
 
 You could install a platform for running local LLMs (Ollama, LM Studio, MTPLX)
 inside the container, but the fixed memory limit of a container isn't well
-suited for a large memory footprint service such as such an LLM platform.
+suited for a large memory footprint service such as an LLM platform.
 
 Container-Agents supports connecting its agents to LLM platforms running
 in the local host. Learn more about option `---local`.
@@ -109,11 +109,6 @@ chmod a+x src/*
 export PATH="$PWD/src:$PATH"
 ```
 
-Be sure to copy your existing `~/.<agent>` etc. directories
-into the corresponding `src/containers/<agent>/!<agent>` directory,
-or modify `agent-start` to map the original `~/.<agent>`
-directories themselves.
-
 From any project directory, start an agent:
 
 ```bash
@@ -126,11 +121,15 @@ vibe
 opencode
 ```
 
+Be sure to run your agents with `---link` to soft-link the
+`src/containers/<agent>/!*` directories and files to their proper
+`~/.config` and `~/.local`, etc., locations.
+
 The wrappers are tiny scripts that all delegate to `src/agent-start`. You can
 also call the main launcher directly:
 
 ```bash
-bash src/agent-start codex
+agent-start ---agent=codex
 ```
 
 
@@ -138,7 +137,7 @@ bash src/agent-start codex
 
 The defaults live near the top of `src/agent-start`, but local machine settings
 can be overridden with `~/dev-env.sh`. This repository includes `dev-env.sh` as a
-template:
+template that you can copy to that location:
 
 ```bash
 DEV_ENV_PROJECT_DIRS=(
@@ -146,6 +145,7 @@ DEV_ENV_PROJECT_DIRS=(
 )
 
 # Base directory for container settings
+# Note: This should be an absolute path! Replace before running!
 DEV_ENV_CONTAINERS_DIR="./src/containers"
 
 DEV_ENV_LOCALHOST_DNS_ALIAS=host.container.internal
@@ -157,9 +157,8 @@ DEV_ENV_VM_PORTS=(22 80 443)
 ```
 
 The most important setting is `PROJECT_DIRS`/`DEV_ENV_PROJECT_DIRS`.
-When your current directory is
-inside one of those paths, `agent-start` considers it trusted and enables the
-agent's unsafe or fully-autonomous flags. **Outside those paths, only the current
+When your current directory is inside one of those paths, `agent-start` considers it trusted and
+enables the  agent's unsafe or fully-autonomous flags. **Outside those paths, only the current
 directory is mounted at `<agent-home>/workspace`, and the unsafe flags are not
 added**.
 
@@ -207,6 +206,7 @@ Options:
   ---all            Map all project dirs ($PROJECT_DIRS) to allow the agent to work across
                     projects. 
   ---sh             Run the container shell, not the agent itself. 
+                    Must be defined after ---agent.
   ---ssh            Map ~/.ssh/* files to allow the agent to access to servers/Virtual Machines. 
   ---local          Create a container DNS 'host.container.internal' that maps to the host's localhost,
                     via 203.0.113.113. Required to access Ollama, LM Studio, MTPLX models,
@@ -227,8 +227,10 @@ Options:
                     to ~/.config, ~/.local, etc. and exit. 
   ---unlink         Unlink './src/containers/<agent>/!*'
                     from ~/.config, ~/.local, etc. and exit. 
-  ---raw            Do not pass any extra options to the agent, such as --dangerously-skip-permissions.
+  ---safe           Do not pass any '--dangerously-skip-permissions'-type options to the agent.
                     Must be defined after ---agent. 
+  ---raw            Do not pass any implicit options or environment to the agent at all.
+                    Must be defined after ---agent.
   ---help           This help. 
 
 All ---local, ---vm also create DNS aliases inside the container, that match host /etc/hosts DNS
@@ -261,7 +263,7 @@ Pass options to the agent:
 - Automatic support for ACP via auto-detection of TTY.
 - Keeps runtime auth/session/log state out of images; the images contain tools
   and starter config, while state is persisted across invocations via mounts.
-- Soft-links persisted state with their expected locations in `~`.
+- Soft-links persisted state to their expected locations in `~`.
 - Uses small wrapper scripts, so daily use can be as simple as `codex` from the
   directory you already work in.
 
@@ -342,8 +344,9 @@ It also ensures all agent actions on the server(s) are traceable.
 Some IDEs (e.g.: Visual Studio Code, JetBrains' IDEs) may install local copies
 of your agents.
 To have the configuration of such agents in sync with their container version,
-while you experiment, this project soft-links the agent-relevant `~/config`,
-`~/.local`, etc files to the main `src/containers/<agent>/!*` locations.
+while you experiment, you can invoke each agent with `---link` to soft-link the
+agent-relevant `~/.config`, `~/.local`, etc., files to the main
+`src/containers/<agent>/!*` locations.
 
 
 ### ACP Support
@@ -375,7 +378,7 @@ Each container image follows the same broad structure:
 - Common development tools such as Git, OpenSSH client, curl, rsync, tar, gzip,
   unzip, compiler tooling, `jq`, `yq`, `nc`, and Node.js 22.
 - An unprivileged user.
-- Agent-specific starter config copied into `/home/agent`.
+- Agent-specific starter config copied into that unprivileged user's home.
 - Agent-specific runtime config mapped from `!*` files and directories — their
   standard leading dot (`~/.*`) replaced with `!` to make it easily visible and
   editable in macOS Finder.
@@ -396,7 +399,7 @@ To add tools that your agents commonly need, edit the relevant Dockerfile under
 4. Add a case to `src/agent-start` with the container image name, environment
    variables, executable, safe arguments, and unsafe arguments.
 5. Add a container-run block with any agent-specific config and SSH mounts.
-6. Rebuild and test with `--sh` before running the agent normally.
+6. Rebuild and test with `---sh` before running the agent normally.
 
 ## Author & License
 

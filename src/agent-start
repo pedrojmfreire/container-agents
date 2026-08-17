@@ -58,8 +58,8 @@ AGENT_HOME="$HOME"
 
 ALLOW_TRIPLE_DASH_OPTS_ONLY=true
 # If true, all options are "---long" and everything else is passed to the agent.
-# This makes "-" redundant.
-# If false, "-letter" and "--short" options are available, requiring "-" before
+# This makes "---" redundant.
+# If false, "-short" and "--long" options are available, requiring "-" before
 # options to be passed to the agent.
 
 SSH_SOCKET="/tmp/agent-start-vm-tunnel.$UID.sock"
@@ -109,9 +109,10 @@ do
 			agent_env=()
 			agent_env_unsafe=()
 			agent_exec=codex
-			agent_args=()
-			agent_args_unsafe=(                             \
+			agent_args=(                                    \
 				--config check_for_update_on_startup=false  \
+			)
+			agent_args_unsafe=(                             \
 				--sandbox danger-full-access                \
 				--dangerously-bypass-approvals-and-sandbox  \
 			)
@@ -181,8 +182,11 @@ do
 			echo "                    Supported agents: claude, codex, antigravity, agy, gemini, vibe, opencode."
 			echo "  ---all            Map all project dirs (\$PROJECT_DIRS) to allow the agent to work across"
 			echo "                    projects. ${aka:+"a.k.a. -a, --all."}"
-			echo "  ---sh             Run the container shell, not the agent itself. ${aka:+"a.k.a. -s, --sh."}"
+			echo "  ---sh             Run the container shell, not the agent itself."
+			echo "                    Must be defined after ---agent. ${aka:+"a.k.a. -s, --sh."}"
 			echo "  ---ssh            Map ~/.ssh/* files to allow the agent to access to servers/Virtual Machines. ${aka:+"a.k.a. --sh."}"
+			echo "                    Expects to find: ~/.ssh/ssh-agent-<agent>.pem, ~/.ssh/ssh-agent-<agent>.pem.pub,"
+			echo "                    ~/.ssh/config-agent-<agent>.pem and ~/.ssh/known_hosts_agents."
 			echo "  ---local          Create a container DNS '$LOCALHOST_DNS_ALIAS' that maps to the host's localhost,"
 			echo "                    via $LOCALHOST_IP_ALIAS. Required to access Ollama, LM Studio, MTPLX models,"
 			echo "                    VMs, or other services running on the host. This DNS entry is persistent across"
@@ -202,7 +206,9 @@ do
 			echo "                    to ~/.config, ~/.local, etc. and exit. ${aka:+"a.k.a. --link."}"
 			echo "  ---unlink         Unlink '$CONTAINERS_DIR/<agent>/!*'"
 			echo "                    from ~/.config, ~/.local, etc. and exit. ${aka:+"a.k.a. --unlink."}"
-			echo "  ---raw            Do not pass any extra options to the agent, such as --dangerously-skip-permissions."
+			echo "  ---safe           Do not pass any '--dangerously-skip-permissions'-type options to the agent."
+			echo "                    Must be defined after ---agent. ${aka:+"a.k.a. --safe."}"
+			echo "  ---raw            Do not pass any implicit options or environment to the agent at all."
 			echo "                    Must be defined after ---agent. ${aka:+"a.k.a. -r, --raw."}"
 			echo "  ---help           This help. ${aka:+"a.k.a. -h, --help."}"
 			echo
@@ -285,6 +291,9 @@ do
 				if [[ -e "$container_path" && ! -e "$home_path" ]]
 				then
 					ln -s "$container_path" "$home_path"
+					echo "$home_path -> $container_path"
+				else
+					echo "$home_path already exists; skipping"
 				fi
 			done
 			exit 0
@@ -299,11 +308,20 @@ do
 				if [[ -L "$home_path" && "$home_path" -ef "$container_path" ]]
 				then
 					rm "$home_path"
+					echo "$home_path removed"
+				else
+					echo "$home_path missing or not a link to $container_path; skipping"
 				fi
 			done
 			exit 0
 			;;
+		".---safe"|"${dot}--safe")
+			agent_env_unsafe=()
+			agent_args_unsafe=()
+			;;
 		".---raw"|"${dot}-r"|"${dot}--raw")
+			agent_env=()
+			agent_env_unsafe=()
 			agent_args=()
 			agent_args_unsafe=()
 			;;
