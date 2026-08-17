@@ -56,6 +56,12 @@ fi
 AGENT_USER="$USER"
 AGENT_HOME="$HOME"
 
+ALLOW_TRIPLE_DASH_OPTS_ONLY=true
+# If true, all options are "---long" and everything else is passed to the agent.
+# This makes "-" redundant.
+# If false, "-letter" and "--short" options are available, requiring "-" before
+# options to be passed to the agent.
+
 SSH_SOCKET="/tmp/agent-start-vm-tunnel.$UID.sock"
 DNS_ALIAS_LIST="/tmp/agent-start-dns-alias.$UID.txt"
 
@@ -63,15 +69,22 @@ DNS_ALIAS_LIST="/tmp/agent-start-dns-alias.$UID.txt"
 # Parse the command-line arguments
 # ===========================================================================
 
+cli_args=()
 is_single_project=true
 has_ssh_access=false
 has_vm_access=false
 has_host_localhost_access=false
 
+dot=.
+aka=" "
+$ALLOW_TRIPLE_DASH_OPTS_ONLY  &&  dot=-
+$ALLOW_TRIPLE_DASH_OPTS_ONLY  &&  aka=
+
+
 while [[ $# -gt 0 ]]
 do
 	case ".$1" in
-		".claude"|".claude-code")
+		".---agent=claude"|".---agent=claude-code"|"${dot}claude"|"${dot}claude-code")
 			agent_container=agent-claude
 			agent_env=(                      \
 				--env DISABLE_UPDATES=1      \
@@ -85,13 +98,13 @@ do
 				--permission-mode bypassPermissions  \
 				--dangerously-skip-permissions       \
 			)
-			agent_homedirs=(
+			agent_home_paths=(
 				"$HOME/.claude"               "$CONTAINERS_DIR/claude/!claude"
 				"$HOME/.claude.json"          "$CONTAINERS_DIR/claude/!claude.json"
 				"$HOME/.config/ccstatusline"  "$CONTAINERS_DIR/claude/!config/ccstatusline"
 			)
 			;;
-		".codex"|".chatgpt")
+		".---agent=codex"|".---agent=chat-gpt"|"${dot}codex"|"${dot}chatgpt")
 			agent_container=agent-codex
 			agent_env=()
 			agent_env_unsafe=()
@@ -102,33 +115,33 @@ do
 				--sandbox danger-full-access                \
 				--dangerously-bypass-approvals-and-sandbox  \
 			)
-			agent_homedirs=(
+			agent_home_paths=(
 				"$HOME/.codex"  "$CONTAINERS_DIR/codex/!codex"
 			)
 			;;
-		".antigravity")
+		".---agent=antigravity"|".---agent=agy"|"${dot}antigravity"|"${dot}agy")
 			agent_container=agent-antigravity
 			agent_env=(--env AGY_CLI_DISABLE_AUTO_UPDATE=true)
 			agent_env_unsafe=()
 			agent_exec=agy
 			agent_args=()
 			agent_args_unsafe=(--dangerously-skip-permissions)
-			agent_homedirs=(
+			agent_home_paths=(
 				"$HOME/.gemini"  "$CONTAINERS_DIR/antigravity/!gemini"
 			)
 			;;
-		".gemini")
+		".---agent=gemini"|"${dot}gemini")
 			agent_container=agent-gemini
 			agent_env=()
 			agent_env_unsafe=()
 			agent_exec=gemini
 			agent_args=()
 			agent_args_unsafe=(--yolo)
-			agent_homedirs=(
+			agent_home_paths=(
 				"$HOME/.gemini"  "$CONTAINERS_DIR/gemini/!gemini"
 			)
 			;;
-		".vibe"|".mistral"|".mistral-vibe")
+		".---agent=vibe"|".---agent=mistral"|".---agent=mistral-vibe"|"${dot}vibe"|"${dot}mistral"|"${dot}mistral-vibe")
 			agent_container=agent-vibe
 			agent_env=(                                \
 				--env VIBE_ENABLE_AUTO_UPDATE=false    \
@@ -139,18 +152,18 @@ do
 			agent_exec=vibe
 			agent_args=()
 			agent_args_unsafe=(--yolo)
-			agent_homedirs=(
+			agent_home_paths=(
 				"$HOME/.vibe"  "$CONTAINERS_DIR/vibe/!vibe"
 			)
 			;;
-		".opencode"|".open-code"|".oc")
+		".---agent=opencode"|".---agent=open-code"|".---agent=oc"|"${dot}opencode"|"${dot}open-code"|"${dot}oc")
 			agent_container=agent-opencode
 			agent_env=(--env OPENCODE_DISABLE_AUTOUPDATE=true)
 			agent_env_unsafe=(--env OPENCODE_PERMISSION='{"*":"allow"}')
 			agent_exec=opencode
 			agent_args=()
 			agent_args_unsafe=(--auto)
-			agent_homedirs=(
+			agent_home_paths=(
 				"$HOME/.cache/opencode"        "$CONTAINERS_DIR/opencode/!cache/opencode"
 				"$HOME/.config/opencode"       "$CONTAINERS_DIR/opencode/!config/opencode"
 				"$HOME/.local/state/opencode"  "$CONTAINERS_DIR/opencode/!local/state/opencode"
@@ -158,70 +171,65 @@ do
 				"$HOME/.local/share/opentui"   "$CONTAINERS_DIR/opencode/!local/share/opentui"
 			)
 			;;
-		".-h"|".--help")
-			script_name="$(basename "$0")"
-			usage_agent=" <agent>"
-			[ "$script_name" = "agent-start" ]  &&  usage_agent=""
+		".---help"|"${dot}-h"|"${dot}--help")
 			echo
 			echo "Usage:"
-			echo "    $script_name$usage_agent [<options>, ...] [-|-- [<agent-option>, ...]]"
-			echo
-			echo "Supported agents:"
-			echo "  claude"
-			echo "  codex"
-			echo "  antigravity, agy"
-			echo "  gemini"
-			echo "  vibe"
-			echo "  opencode"
+			echo "    $(basename "$0") [<options>, ...]"
 			echo
 			echo "Options:"
-			echo "  -a,  --all          Map all project dirs (\$PROJECT_DIRS) to allow the agent to work across"
-			echo "                      projects."
-			echo "  -s,  --sh           Run the container shell, not the agent itself."
-			echo "       --ssh          Map ~/.ssh/* files to allow the agent to access to servers/Virtual Machines."
-			echo "  -l,  --local        Create a container DNS '$LOCALHOST_DNS_ALIAS' that maps to the host's localhost,"
-			echo "                      via $LOCALHOST_IP_ALIAS. Required to access Ollama, LM Studio, MTPLX models,"
-			echo "                      VMs, or other services running on the host. This DNS entry is persistent across"
-			echo "                      all future invocations of agents, until a reboot. Environment vars"
-			echo "                      LOCALHOST_DNS_ALIAS and LOCALHOST_IP_ALIAS are passed to the agent for reuse."
-			echo "                      This is incompatible with iCloud Private Relay."
-			echo "  -l-, --local-del    Delete DNS entry created by -l, --local, and exit."
-			echo "       --vm           Setup SSH tunnels to allow the agent to access a host VM ('$VM_USER@$VM_HOST')"
-			echo "                      using Shared Network. Not required for Bridged Network."
-			echo "                      This SSH tunnel is persistent across all future invocations of agents, until"
-			echo "                      the VM shuts down. Implies --local."
-			echo "                      This is incompatible with services running in the host in the same ports"
-			echo "                      (${VM_PORTS[*]})."
-			echo "       --vm-del       Close the SSH tunnel created by --vm, and exit. Does not do a --local-del."
-			echo "  -c,  --connect      Combined --ssh, --local and --vm."
-			# TODO: Make the soft-linking of $HOME directories, optional? Wait for feedback.
-			# echo "       --link         Link '$CONTAINERS_DIR/<agent>/!*' to ~/.config, ~/.local, etc. and exit."
+			echo "  ---agent=<agent>  Select the agent to use (mandatory). ${aka:+"a.k.a. just <agent>."}"
+			echo "                    Supported agents: claude, codex, antigravity, agy, gemini, vibe, opencode."
+			echo "  ---all            Map all project dirs (\$PROJECT_DIRS) to allow the agent to work across"
+			echo "                    projects. ${aka:+"a.k.a. -a, --all."}"
+			echo "  ---sh             Run the container shell, not the agent itself. ${aka:+"a.k.a. -s, --sh."}"
+			echo "  ---ssh            Map ~/.ssh/* files to allow the agent to access to servers/Virtual Machines. ${aka:+"a.k.a. --sh."}"
+			echo "  ---local          Create a container DNS '$LOCALHOST_DNS_ALIAS' that maps to the host's localhost,"
+			echo "                    via $LOCALHOST_IP_ALIAS. Required to access Ollama, LM Studio, MTPLX models,"
+			echo "                    VMs, or other services running on the host. This DNS entry is persistent across"
+			echo "                    all future invocations of agents, until a reboot. Environment vars"
+			echo "                    LOCALHOST_DNS_ALIAS and LOCALHOST_IP_ALIAS are passed to the agent for reuse."
+			echo "                    This is incompatible with iCloud Private Relay. ${aka:+"a.k.a. -l, --local."}"
+			echo "  ---local-del      Delete DNS entry created by ---local, and exit. ${aka:+"a.k.a. -l-, --local-del."}"
+			echo "  ---vm             Setup SSH tunnels to allow the agent to access a host VM ('$VM_USER@$VM_HOST')"
+			echo "                    using Shared Network. Not required for Bridged Network."
+			echo "                    This SSH tunnel is persistent across all future invocations of agents, until"
+			echo "                    the VM shuts down. Implies ---local."
+			echo "                    This is incompatible with services running in the host in the same ports"
+			echo "                    (${VM_PORTS[*]}). ${aka:+"a.k.a. --vm."}"
+			echo "  ---vm-del         Close the SSH tunnel created by ---vm, and exit. Does not do a ---local-del. ${aka:+"a.k.a. --vm-del."}"
+			echo "  ---connect        Combined ---ssh, ---local and ---vm. ${aka:+"a.k.a. -c, --connect."}"
+			echo "  ---link           Link '$CONTAINERS_DIR/<agent>/!*'"
+			echo "                    to ~/.config, ~/.local, etc. and exit. ${aka:+"a.k.a. --link."}"
+			echo "  ---unlink         Unlink '$CONTAINERS_DIR/<agent>/!*'"
+			echo "                    from ~/.config, ~/.local, etc. and exit. ${aka:+"a.k.a. --unlink."}"
+			echo "  ---raw            Do not pass any extra options to the agent, such as --dangerously-skip-permissions."
+			echo "                    Must be defined after ---agent. ${aka:+"a.k.a. -r, --raw."}"
+			echo "  ---help           This help. ${aka:+"a.k.a. -h, --help."}"
 			echo
-			echo "All -l, --local, --vm also create DNS aliases inside the container, that match host /etc/hosts DNS"
+			echo "All ---local, ---vm also create DNS aliases inside the container, that match host /etc/hosts DNS"
 			echo "aliases pointing to 127.0.0.1 or the VM's '$VM_HOST' IP. All DNS aliases inside the container will"
 			echo "point to $LOCALHOST_IP_ALIAS. This ensures they match functionality on the host and container."
 			echo
 			echo "Pass options to the agent:"
-			echo "  -  <agent-options>  Pass options along with the default options determined by this script."
-			echo "  -- <agent-options>  Pass ONLY the options specified."
+			echo "  --- <agent-options>  Stop processing the next options and pass them to the agent. ${aka:+"a.k.a. -."}"
 			echo
 			exit 0
 			;;
-		".-a"|".--all")
+		".---all"|"${dot}-a"|"${dot}--all")
 			is_single_project=false
 			;;
-		".-s"|".--sh")
+		".---sh"|"${dot}-s"|"${dot}--sh")
 			agent_exec=bash
 			agent_args=()
 			agent_args_unsafe=()
 			;;
-		".--ssh")
+		".---ssh"|"${dot}--ssh")
 			has_ssh_access=true
 			;;
-		".-l"|".--local")
+		".---local"|"${dot}-l"|"${dot}--local")
 			has_host_localhost_access=true
 			;;
-		".-l-"|".--local-del")
+		".---local-del"|"${dot}-l-"|"${dot}--local-del")
 			echo "Deleting DNS record '$LOCALHOST_DNS_ALIAS' (requires sudo)"
 			sudo container system dns delete "$LOCALHOST_DNS_ALIAS"
 			echo
@@ -230,11 +238,11 @@ do
 			container system start
 			exit 0
 			;;
-		".--vm")
+		".---vm"|"${dot}--vm")
 			has_vm_access=true
 			has_host_localhost_access=true
 			;;
-		".--vm-"|".--vm-del"|".--vm-close")
+		".---vm-"|".---vm-del"|".---vm-close"|"${dot}--vm-"|"${dot}--vm-del"|"${dot}--vm-close")
 			# TODO: Review using "container system dns ..." no earlier than 2027, to evaluate it against copying /etc/hosts
 			# This is failing (2026-08), likely due to bugs:
 			# https://github.com/apple/container/issues/817
@@ -262,24 +270,56 @@ do
 			fi
 			exit 0
 			;;
-		".-c"|".--connect"|".--combined")
+		".---connect"|".---combined"|"${dot}-c"|"${dot}--connect"|"${dot}--combined")
 			has_ssh_access=true
 			has_vm_access=true
 			has_host_localhost_access=true
 			;;
-		".-")
-			shift
-			break
+		".---link")
+			# Soft-link all configuration directories to $HOME
+			for ((i=0; i<${#agent_home_paths[@]}; i+=2))
+			do
+				home_path="${agent_home_paths[i]}"
+				container_path="${agent_home_paths[i+1]}"
+
+				if [[ -e "$container_path" && ! -e "$home_path" ]]
+				then
+					ln -s "$container_path" "$home_path"
+				fi
+			done
+			exit 0
 			;;
-		".--")
-			shift
+		".---unlink"|".---link-del")
+			# Remove all soft links of all configuration directories in $HOME
+			for ((i=0; i<${#agent_home_paths[@]}; i+=2))
+			do
+				home_path="${agent_home_paths[i]}"
+				container_path="${agent_home_paths[i+1]}"
+
+				if [[ -L "$home_path" && "$home_path" -ef "$container_path" ]]
+				then
+					rm "$home_path"
+				fi
+			done
+			exit 0
+			;;
+		".---raw"|"${dot}-r"|"${dot}--raw")
 			agent_args=()
 			agent_args_unsafe=()
+			;;
+		".---"|"${dot}-")
+			shift
+			cli_args+=("$@")
 			break
 			;;
 		*)
-			echo "Missing or unknown AI agent ('$1') as argument."
-			exit 1
+			if $ALLOW_TRIPLE_DASH_OPTS_ONLY
+			then
+				cli_args+=("$1")
+			else
+				echo "Missing or unknown argument ('$1'). Use ---help."
+				exit 1
+			fi
 			;;
 	esac
 	shift
@@ -437,21 +477,6 @@ then
 fi
 
 
-# Soft-link all configuration directories to $HOME
-# ===========================================================================
-
-for ((i=0; i<${#agent_homedirs[@]}; i+=2))
-do
-    homedir="${agent_homedirs[i]}"
-    containerdir="${agent_homedirs[i+1]}"
-
-    if [[ -e "$containerdir" && ! -e "$homedir" ]]
-    then
-        ln -s "$containerdir" "$homedir"
-    fi
-done
-
-
 # Start the AI agent's container
 # ===========================================================================
 
@@ -471,7 +496,7 @@ case $agent_container in
 				)
 		fi
 		exec container run "${tty_args[@]}" --rm                                     \
-			--cpus 2 --memory 4G                                                     \
+			--cpus 2 --memory 2G                                                     \
 			--progress none                                                          \
 			"${volumes[@]}"                                                          \
 			--volume "$CONTAINERS_DIR/claude/!claude:$AGENT_HOME/.claude"            \
@@ -483,7 +508,7 @@ case $agent_container in
 			--env COLORTERM                                                          \
 			--env TERM                                                               \
 			"${agent_env[@]}"                                                        \
-			"$agent_container" "$agent_exec" "$@" "${agent_args[@]}"
+			"$agent_container" "$agent_exec" "${agent_args[@]}" "${cli_args[@]}"
 		;;
 
 	"agent-codex")
@@ -497,7 +522,7 @@ case $agent_container in
 				)
 		fi
 		exec container run "${tty_args[@]}" --rm                        \
-			--cpus 2 --memory 4G                                        \
+			--cpus 2 --memory 1G                                        \
 			--progress none                                             \
 			"${volumes[@]}"                                             \
 			--volume "$CONTAINERS_DIR/codex/!codex:$AGENT_HOME/.codex"  \
@@ -507,7 +532,7 @@ case $agent_container in
 			--env COLORTERM                                             \
 			--env TERM                                                  \
 			"${agent_env[@]}"                                           \
-			"$agent_container" "$agent_exec" "$@" "${agent_args[@]}"
+			"$agent_container" "$agent_exec" "${agent_args[@]}" "${cli_args[@]}"
 		;;
 
 	"agent-antigravity")
@@ -521,7 +546,7 @@ case $agent_container in
 				)
 		fi
 		exec container run "${tty_args[@]}" --rm                                \
-			--cpus 2 --memory 4G                                                \
+			--cpus 2 --memory 1G                                                \
 			--progress none                                                     \
 			"${volumes[@]}"                                                     \
 			--volume "$CONTAINERS_DIR/antigravity/!gemini:$AGENT_HOME/.gemini"  \
@@ -531,7 +556,7 @@ case $agent_container in
 			--env COLORTERM                                                     \
 			--env TERM                                                          \
 			"${agent_env[@]}"                                                   \
-			"$agent_container" "$agent_exec" "$@" "${agent_args[@]}"
+			"$agent_container" "$agent_exec" "${agent_args[@]}" "${cli_args[@]}"
 		;;
 
 	"agent-gemini")
@@ -545,7 +570,7 @@ case $agent_container in
 				)
 		fi
 		exec container run "${tty_args[@]}" --rm                           \
-			--cpus 2 --memory 4G                                           \
+			--cpus 2 --memory 1G                                           \
 			--progress none                                                \
 			"${volumes[@]}"                                                \
 			--volume "$CONTAINERS_DIR/gemini/!gemini:$AGENT_HOME/.gemini"  \
@@ -555,7 +580,7 @@ case $agent_container in
 			--env COLORTERM                                                \
 			--env TERM                                                     \
 			"${agent_env[@]}"                                              \
-			"$agent_container" "$agent_exec" "$@" "${agent_args[@]}"
+			"$agent_container" "$agent_exec" "${agent_args[@]}" "${cli_args[@]}"
 		;;
 
 	"agent-vibe")
@@ -569,7 +594,7 @@ case $agent_container in
 				)
 		fi
 		exec container run "${tty_args[@]}" --rm                     \
-			--cpus 2 --memory 4G                                     \
+			--cpus 2 --memory 2G                                     \
 			--progress none                                          \
 			"${volumes[@]}"                                          \
 			--volume "$CONTAINERS_DIR/vibe/!vibe:$AGENT_HOME/.vibe"  \
@@ -579,7 +604,7 @@ case $agent_container in
 			--env COLORTERM                                          \
 			--env TERM                                               \
 			"${agent_env[@]}"                                        \
-			"$agent_container" "$agent_exec" "$@" "${agent_args[@]}"
+			"$agent_container" "$agent_exec" "${agent_args[@]}" "${cli_args[@]}"
 		;;
 
 	"agent-opencode")
@@ -593,7 +618,7 @@ case $agent_container in
 				)
 		fi
 		exec container run "${tty_args[@]}" --rm                             \
-			--cpus 2 --memory 4G                                             \
+			--cpus 2 --memory 2G                                             \
 			--progress none                                                  \
 			"${volumes[@]}"                                                  \
 			--volume "$CONTAINERS_DIR/opencode/!cache:$AGENT_HOME/.cache"    \
@@ -605,7 +630,7 @@ case $agent_container in
 			--env COLORTERM                                                  \
 			--env TERM                                                       \
 			"${agent_env[@]}"                                                \
-			"$agent_container" "$agent_exec" "$@" "${agent_args[@]}"
+			"$agent_container" "$agent_exec" "${agent_args[@]}" "${cli_args[@]}"
 		;;
 
 	*)

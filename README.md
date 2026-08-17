@@ -70,14 +70,14 @@ inside the container, but the fixed memory limit of a container isn't well
 suited for a large memory footprint service such as such an LLM platform.
 
 Container-Agents supports connecting its agents to LLM platforms running
-in the local host. Learn more about option `--local`.
+in the local host. Learn more about option `---local`.
 
 
 ### Development and Staging
 
 Container-Agents (optionally) supports connecting its agents to virtual machines running on
 the local host, and to map agent-specific SSH configuration with the container.
-Learn more about options `--vm` and `--ssh`.
+Learn more about options `---vm` and `---ssh`.
 
 
 ## Quick Start
@@ -86,7 +86,7 @@ Learn more about options `--vm` and `--ssh`.
 
 - macOS with [Apple Container](https://github.com/apple/container) installed and working.
 - Enough local resources for the default container run settings:
-  `--cpus 2 --memory 4G`.
+  `--cpus 2 --memory 2G`.
 - Agent credentials or login state for whichever CLI you want to use.
 - `sudo` access for Apple Container DNS helpers and VM tunnel helpers.
 
@@ -106,7 +106,7 @@ and enable their executable permission.
 
 ```bash
 chmod a+x src/*
-export PATH="$PWD/../../src:$PATH"
+export PATH="$PWD/src:$PATH"
 ```
 
 Be sure to copy your existing `~/.<agent>` etc. directories
@@ -182,62 +182,61 @@ codex
 Pass normal CLI arguments to the agent:
 
 ```bash
-codex - "explain this repository"
-claude - "run the tests and fix the first failure"
+codex "explain this repository"
+claude "run the tests and fix the first failure"
 ```
 
-Use `--` when you want to replace the wrapper's default agent arguments:
-
-```bash
-codex -- --help
-```
+Use `---` when you want to stop processing further arguments and pass the remaining ones to the agent,
+unchanged. This is optional: if `ALLOW_TRIPLE_DASH_OPTS_ONLY` is `true` (default), all arguments
+recognized by the `agent-start` wrapper start with `---`, and any arguments not recognized will be
+passed to the agent.
 
 Show all launch options:
 
 ```bash
-codex --help
+codex ---help
 ```
 
 ```
 Usage:
-    agent-start <agent> [<options>, ...] [-|-- [<agent-option>, ...]]
-
-Supported agents:
-  claude
-  codex
-  antigravity, agy
-  gemini
-  vibe
-  opencode
+    opencode [<options>, ...]
 
 Options:
-  -a,  --all          Map all project dirs ($PROJECT_DIRS) to allow the agent to work across
-                      projects.
-  -s,  --sh           Run the container shell, not the agent itself.
-       --ssh          Map ~/.ssh/* files to allow the agent to access to servers/Virtual Machines.
-  -l,  --local        Create a container DNS 'host.container.internal' that maps to the host's localhost,
-                      via 203.0.113.113. Required to access Ollama, LM Studio, MTPLX models,
-                      VMs, or other services running on the host. This DNS entry is persistent across
-                      all future invocations of agents, until a reboot. Environment vars
-                      LOCALHOST_DNS_ALIAS and LOCALHOST_IP_ALIAS are passed to the agent for reuse.
-                      This is incompatible with iCloud Private Relay.
-  -l-, --local-del    Delete DNS entry created by -l, --local, and exit.
-       --vm           Setup SSH tunnels to allow the agent to access a host VM ('user@vm.local')
-                      using Shared Network. Not required for Bridged Network.
-                      This SSH tunnel is persistent across all future invocations of agents, until
-                      the VM shuts down. Implies --local.
-                      This is incompatible with services running in the host in the same ports
-                      (22 80 443).
-       --vm-del       Close the SSH tunnel created by --vm, and exit. Does not do a --local-del.
-  -c,  --connect      Combined --ssh, --local and --vm.
+  ---agent=<agent>  Select the agent to use (mandatory). 
+                    Supported agents: claude, codex, antigravity, agy, gemini, vibe, opencode.
+  ---all            Map all project dirs ($PROJECT_DIRS) to allow the agent to work across
+                    projects. 
+  ---sh             Run the container shell, not the agent itself. 
+  ---ssh            Map ~/.ssh/* files to allow the agent to access to servers/Virtual Machines. 
+  ---local          Create a container DNS 'host.container.internal' that maps to the host's localhost,
+                    via 203.0.113.113. Required to access Ollama, LM Studio, MTPLX models,
+                    VMs, or other services running on the host. This DNS entry is persistent across
+                    all future invocations of agents, until a reboot. Environment vars
+                    LOCALHOST_DNS_ALIAS and LOCALHOST_IP_ALIAS are passed to the agent for reuse.
+                    This is incompatible with iCloud Private Relay. 
+  ---local-del      Delete DNS entry created by ---local, and exit. 
+  ---vm             Setup SSH tunnels to allow the agent to access a host VM ('user@vm.local')
+                    using Shared Network. Not required for Bridged Network.
+                    This SSH tunnel is persistent across all future invocations of agents, until
+                    the VM shuts down. Implies ---local.
+                    This is incompatible with services running in the host in the same ports
+                    (22 80 443). 
+  ---vm-del         Close the SSH tunnel created by ---vm, and exit. Does not do a ---local-del. 
+  ---connect        Combined ---ssh, ---local and ---vm. 
+  ---link           Link './src/containers/<agent>/!*'
+                    to ~/.config, ~/.local, etc. and exit. 
+  ---unlink         Unlink './src/containers/<agent>/!*'
+                    from ~/.config, ~/.local, etc. and exit. 
+  ---raw            Do not pass any extra options to the agent, such as --dangerously-skip-permissions.
+                    Must be defined after ---agent. 
+  ---help           This help. 
 
-All -l, --local, --vm also create DNS aliases inside the container, that match host /etc/hosts DNS
+All ---local, ---vm also create DNS aliases inside the container, that match host /etc/hosts DNS
 aliases pointing to 127.0.0.1 or the VM's 'vm.local' IP. All DNS aliases inside the container will
 point to 203.0.113.113. This ensures they match functionality on the host and container.
 
 Pass options to the agent:
-  -  <agent-options>  Pass options along with the default options determined by this script.
-  -- <agent-options>  Pass ONLY the options specified.
+  --- <agent-options>  Stop processing the next options and pass them to the agent.
 ```
 
 
@@ -282,7 +281,7 @@ the host's `localhost`. No default routing exists between the two.
 
 Apple
 [provides a solution](https://github.com/apple/container/blob/main/docs/host-integration.md#access-a-host-service-from-a-container),
-though. `--local` creates an Apple Container DNS entry so the container can reach a host
+though. `---local` creates an Apple Container DNS entry so the container can reach a host
 service through `host.container.internal`. This is useful for local LLM model
 servers, web apps, databases, and API mocks.
 
@@ -301,9 +300,9 @@ However, Shared Networking brings a new hurdle: Apple creates the IP for the
 VM under a separate virtual network segment from Apple Containers. No default
 routing exists between the two.
 
-To enable this communication, Container-Agents has the `--vm` option which
+To enable this communication, Container-Agents has the `---vm` option which
 creates SSH port forwards from the host to a configured VM. Using this option
-also enables `--local` so the container can reach the host's `localhost` network.
+also enables `---local` so the container can reach the host's `localhost` network.
 
 
 ### /etc/hosts
@@ -312,7 +311,7 @@ Custom DNS hosts defined in `/etc/hosts` of the host system are common in
 developer systems. They point either to locally-running services
 (LLMs, MCPs, databases), or to VM services.
 
-When using either `--local` or `--vm`, all relevant `/etc/hosts` names are copied
+When using either `---local` or `---vm`, all relevant `/etc/hosts` names are copied
 to the container system, with all of them pointing to
 `LOCALHOST_IP_ALIAS`/`DEV_ENV_LOCALHOST_IP_ALIAS`. This ensures those names
 are seamlessly available to the agent, as if it were running on the host.
@@ -323,7 +322,7 @@ host key but receives a new IP address.
 
 ### SSH Access with Auditing Support
 
-`--ssh` mounts agent-specific SSH material into the container. The current
+`---ssh` mounts agent-specific SSH material into the container. The current
 convention expects files like:
 
 ```text
@@ -349,14 +348,14 @@ while you experiment, this project soft-links the agent-relevant `~/config`,
 
 ### ACP Support
 
-Use this sample JSON with JetBrain's IDEs to invoke OpenCode in a container:
+Use this sample JSON with JetBrains' IDEs to invoke OpenCode in a container:
 
 ```json
 { "default_mcp_settings": {},
   "agent_servers": {
     "OpenCode in container": {
-      "command":"/usr/local/bin/opencode",
-      "args": ["--", "acp"]
+      "command":"/<path-to->/opencode",
+      "args": ["---raw", "acp"]
     }
   }
 }
@@ -375,14 +374,14 @@ Each container image follows the same broad structure:
 - `almalinux:10-minimal` base image.
 - Common development tools such as Git, OpenSSH client, curl, rsync, tar, gzip,
   unzip, compiler tooling, `jq`, `yq`, `nc`, and Node.js 22.
-- An unprivileged `agent` user.
+- An unprivileged user.
 - Agent-specific starter config copied into `/home/agent`.
 - Agent-specific runtime config mapped from `!*` files and directories — their
   standard leading dot (`~/.*`) replaced with `!` to make it easily visible and
   editable in macOS Finder.
 - The selected AI CLI installed during image build.
 - `bootstrap-hosts.sh` as the entrypoint, which appends host aliases and then
-  drops privileges to the `agent` user before running the CLI.
+  drops privileges to the unprivileged user before running the CLI.
 
 To add tools that your agents commonly need, edit the relevant Dockerfile under
 `src/containers/<agent>/Dockerfile` and rebuild that image.
