@@ -255,6 +255,7 @@ Pass options to the agent:
 - **Enables full agent permissions only inside trusted project directories**.
 - Optionally mounts all configured project roots so agents can work across
   related repositories.
+- Shares a single AI skills directory ($AI_SKILLS_DIR) across all agents
 - Optionally mounts **agent-specific SSH keys and known hosts**.
 - Optionally exposes host `localhost` to containers through a stable DNS alias,
   useful for Ollama, LM Studio, local model servers, web apps, databases, and

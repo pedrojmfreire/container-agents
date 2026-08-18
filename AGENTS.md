@@ -13,6 +13,7 @@ Container images live under `src/containers/<agent>/`. Each image installs a com
 
 ## Editing Rules
 
+- When you need to search docs, use `context7` tools.
 - Keep shell scripts POSIX-ish Bash and consistent with the existing style: `#!/bin/bash`, `set -e`, uppercase configuration variables, and section headers.
 - Do not bake credentials, sessions, or logs into Docker images. Runtime state should stay in host-mounted directories or be excluded by `Dockerfile.dockerignore`.
 - Preserve the safety model in `src/agent-start`: restricted mounts outside whitelisted project paths, unsafe agent flags only inside `PROJECT_WHITELIST`, and explicit flags for SSH, localhost, and VM access.

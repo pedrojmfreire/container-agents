@@ -26,3 +26,7 @@ DEV_ENV_VM_PORTS=(
 	80    # HTTP
 	443   # HTTPS
 )
+
+
+# Base directory for user-level AI skills
+DEV_ENV_AI_SKILLS_DIR="$HOME/.agents/skills"

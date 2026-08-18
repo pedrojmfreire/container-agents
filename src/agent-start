@@ -14,6 +14,8 @@ PROJECT_DIRS=(
 	"$HOME/Documents/Software"
 )
 
+# Base directory for container settings
+# Note: This should be an absolute path! Replace before running!
 CONTAINERS_DIR="./src/containers"
 
 LOCALHOST_DNS_ALIAS=host.container.internal
@@ -28,6 +30,9 @@ VM_PORTS=(
 	80    # HTTP
 	443   # HTTPS
 )
+
+# Base directory for user-level AI skills
+AI_SKILLS_DIR="$HOME/.agents/skills"
 
 
 # Override local configuration with ~/dev-env.sh
@@ -47,6 +52,8 @@ then
 	VM_USER="${DEV_ENV_VM_USER:-$VM_USER}"
 	VM_HOST="${DEV_ENV_VM_HOST:-$VM_HOST}"
 	((${#DEV_ENV_VM_PORTS[@]}))  &&  VM_PORTS=("${DEV_ENV_VM_PORTS[@]}")
+
+	AI_SKILLS_DIR="${DEV_ENV_AI_SKILLS_DIR:-$AI_SKILLS_DIR}"
 fi
 
 
@@ -504,6 +511,13 @@ tty_args=(-i)
 case $agent_container in
 
 	"agent-claude")
+		agent_container_skills_dir="$CONTAINERS_DIR/claude/!claude/skills"
+		if [[ ! -d "$agent_container_skills_dir" || -z "$(ls -A "$agent_container_skills_dir" 2>/dev/null)" ]]
+		then
+			volumes+=(
+				--volume "$AI_SKILLS_DIR:$AGENT_HOME/.claude/skills"
+				)
+		fi
 		if $has_ssh_access
 		then
 			volumes+=(
@@ -544,6 +558,7 @@ case $agent_container in
 			--progress none                                             \
 			"${volumes[@]}"                                             \
 			--volume "$CONTAINERS_DIR/codex/!codex:$AGENT_HOME/.codex"  \
+			--volume "$AI_SKILLS_DIR:$AGENT_HOME/.agents/skills"        \
 			--workdir "$workdir"                                        \
 			--env LOCALHOST_DNS_ALIAS="$LOCALHOST_DNS_ALIAS"            \
 			--env LOCALHOST_IP_ALIAS="$LOCALHOST_IP_ALIAS"              \
@@ -554,6 +569,13 @@ case $agent_container in
 		;;
 
 	"agent-antigravity")
+		agent_container_skills_dir="$CONTAINERS_DIR/antigravity/!gemini/config/skills"
+		if [[ ! -d "$agent_container_skills_dir" || -z "$(ls -A "$agent_container_skills_dir" 2>/dev/null)" ]]
+		then
+			volumes+=(
+				--volume "$AI_SKILLS_DIR:$AGENT_HOME/.gemini/config/skills"
+				)
+		fi
 		if $has_ssh_access
 		then
 			volumes+=(
@@ -578,6 +600,13 @@ case $agent_container in
 		;;
 
 	"agent-gemini")
+		agent_container_skills_dir="$CONTAINERS_DIR/gemini/!gemini/config/skills"
+		if [[ ! -d "$agent_container_skills_dir" || -z "$(ls -A "$agent_container_skills_dir" 2>/dev/null)" ]]
+		then
+			volumes+=(
+				--volume "$AI_SKILLS_DIR:$AGENT_HOME/.gemini/config/skills"
+				)
+		fi
 		if $has_ssh_access
 		then
 			volumes+=(
@@ -602,6 +631,13 @@ case $agent_container in
 		;;
 
 	"agent-vibe")
+		agent_container_skills_dir="$CONTAINERS_DIR/vibe/!vibe/skills"
+		if [[ ! -d "$agent_container_skills_dir" || -z "$(ls -A "$agent_container_skills_dir" 2>/dev/null)" ]]
+		then
+			volumes+=(
+				--volume "$AI_SKILLS_DIR:$AGENT_HOME/.vibe/skills"
+				)
+		fi
 		if $has_ssh_access
 		then
 			volumes+=(
@@ -642,6 +678,7 @@ case $agent_container in
 			--volume "$CONTAINERS_DIR/opencode/!cache:$AGENT_HOME/.cache"    \
 			--volume "$CONTAINERS_DIR/opencode/!config:$AGENT_HOME/.config"  \
 			--volume "$CONTAINERS_DIR/opencode/!local:$AGENT_HOME/.local"    \
+			--volume "$AI_SKILLS_DIR:$AGENT_HOME/.agents/skills"             \
 			--workdir "$workdir"                                             \
 			--env LOCALHOST_DNS_ALIAS="$LOCALHOST_DNS_ALIAS"                 \
 			--env LOCALHOST_IP_ALIAS="$LOCALHOST_IP_ALIAS"                   \

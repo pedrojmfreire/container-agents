@@ -43,7 +43,8 @@ COPY --chown="$AGENT_USER:$AGENT_USER"  "!local"   "$AGENT_HOME/.local"
 RUN curl -fsSL https://opencode.ai/install | bash -    && \
     opencode stats  >/dev/null                         && \
     npm cache clean --force
-    # "opencode stats" forces OpenCode to bootstrap its NPM dependencies
+    # "opencode stats" forces OpenCode to bootstrap its NPM dependencies,
+    # namely to install plugins references in its configuration, that have not yet been installed
 
 USER root
 WORKDIR /home/root
