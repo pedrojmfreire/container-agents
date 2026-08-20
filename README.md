@@ -1,5 +1,9 @@
 # Container-Agents
 
+_You can read more about the rationale behind this project in
+Pedro Freire's blog post "[Safer & Faster: AI in an Apple Container](https://www.pedrofreire.com/blog/safer-faster-ai-in-apple-container.html)"_
+
+
 Are you a proud macOS 26+ user on Apple Silicon wanting to run
 [Apple Container](https://github.com/apple/container)
 to sandbox your AI agents?
@@ -256,6 +260,8 @@ Pass options to the agent:
 - Optionally mounts all configured project roots so agents can work across
   related repositories.
 - Shares a single AI skills directory ($AI_SKILLS_DIR) across all agents
+  (**BETA**: this shares only the directory, doesn't change the format;
+  set $AI_SKILLS_DIR empty to disable)
 - Optionally mounts **agent-specific SSH keys and known hosts**.
 - Optionally exposes host `localhost` to containers through a stable DNS alias,
   useful for Ollama, LM Studio, local model servers, web apps, databases, and

@@ -29,4 +29,8 @@ DEV_ENV_VM_PORTS=(
 
 
 # Base directory for user-level AI skills
-DEV_ENV_AI_SKILLS_DIR="$HOME/.agents/skills"
+# BETA: this shares only the directory, doesn't change the format
+# Set to empty to disable this feature
+DEV_ENV_AI_SKILLS_DIR=
+	# Disabled
+	# Good starting point to enable: "$HOME/.agents/skills"
