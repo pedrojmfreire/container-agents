@@ -9,6 +9,9 @@ Are you a proud macOS 26+ user on Apple Silicon wanting to run
 to sandbox your AI agents?
 Then this project is for you.
 
+Container-Agents is a macOS-native development environment for running multiple coding agents autonomously while
+preserving the developer's existing workflow—including local VMs and controlled remote-server access.
+
 Container-Agents gives each coding agent its own disposable Linux workspace
 **while still feeling identical to your normal terminal workflow**.
 Prior to using this project you'd launch Claude Code with:
@@ -82,6 +85,33 @@ in the local host. Learn more about option `---local`.
 Container-Agents (optionally) supports connecting its agents to virtual machines running on
 the local host, and to map agent-specific SSH configuration with the container.
 Learn more about options `---vm` and `---ssh`.
+
+
+## Why Container-Agents?
+
+What stands out in Container-Agents is it's opinionated nature about disappearing underneath the developer's existing
+environment. You type `claude`; your IDE passes the same absolute paths; your existing VM hostnames still work;
+your existing servers remain accessible under deliberately constrained identities.
+
+Find a quick comparison below.
+
+| Capability                            | Container-Agents                                                                                  | [Docker Sandboxes](https://www.docker.com/products/docker-sandboxes/)                                             | [Zigotica's Agent Sandbox](https://github.com/zigotica/agent-sandbox)          | [Mattolson's Agent Sandbox](https://github.com/mattolson/agent-sandbox)        |
+|---------------------------------------|---------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------|--------------------------------------------------------------------------------|
+| Autonomous coding agents              | Designed for autonomous coding CLIs, with unsafe flags enabled only inside trusted project paths. | Possible, but usually assembled per project or per CLI.                                                           | Focused on sandboxing an agent workflow; agent support depends on its harness. | Focused on agent sandboxing; agent support depends on its configured workflow. |
+| Multiple agent harnesses              | Built around wrapper scripts for Codex, Claude Code, Gemini, Antigravity, Vibe, and OpenCode.     | Usually one-off images or compose files unless you build a shared launcher layer.                                 | Primarily one sandbox harness.                                                 | Primarily one sandbox harness.                                                 |
+| Strong VM isolation                   | Uses Apple Container, which runs Linux containers inside Apple's lightweight VM isolation model.  | Docker Desktop also uses a Linux VM on macOS, but behavior depends on Docker's file sharing and networking model. | Docker-based isolation.                                                        | Docker-based isolation.                                                        |
+| Only expose project                   | ✓                                                                                                | Commonly possible with bind mounts, but depends on each setup.                                                    | Project exposure depends on how the sandbox is launched.                       | Project exposure depends on how the sandbox is launched.                       |
+| Current directory by default          | ✓                                                                                                | Possible, but typically requires custom scripts or aliases.                                                       | Depends on the harness invocation.                                             | Depends on the harness invocation.                                             |
+| Preserve identical absolute host path | ✓                                                                                                | Usually not by default; many setups mount to `/workspace` or another container-only path.                         | Typically uses a container workspace path.                                     | Typically uses a container workspace path.                                     |
+| Host-local services                   | ✓                                                                                                | Possible through Docker host networking conventions, with platform-specific caveats.                              | Depends on Docker networking configuration.                                    | Depends on Docker networking configuration.                                    |
+| Network access policies               | Explicit flags control localhost, VM access, SSH material, and raw/safe agent startup.            | Docker network policy is flexible, but usually left to the caller to define.                                      | Depends on the sandbox configuration.                                          | Depends on the sandbox configuration.                                          |
+| Local development VM integration      | ✓                                                                                                | Possible manually with Docker networking or host tunnels.                                                         | Not a primary feature.                                                         | Not a primary feature.                                                         |
+| Per-agent SSH identities              | ✓                                                                                                | Possible manually, but not usually a built-in convention.                                                         | Depends on configuration.                                                      | Depends on configuration.                                                      |
+| Remote-server agent attribution       | ✓                                                                                                | Possible if you create separate keys and mount them carefully.                                                    | Depends on configured SSH identity handling.                                   | Depends on configured SSH identity handling.                                   |
+| Trusted-directory -> autonomous mode  | ✓                                                                                                | Usually manual per invocation.                                                                                    | Depends on the harness policy.                                                 | Depends on the harness policy.                                                 |
+| Native Apple Containers               | ✓                                                                                                | No                                                                                                                | No                                                                             | No                                                                             |
+| Cross-platform                        | No                                                                                                | ✓                                                                                                                | ✓                                                                             | ✓                                                                             |
+
 
 
 ## Quick Start
