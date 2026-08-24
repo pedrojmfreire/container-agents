@@ -36,8 +36,11 @@ WORKDIR "$AGENT_HOME"
 
 COPY --chown="$AGENT_USER:$AGENT_USER"  "!codex"  "$AGENT_HOME/.codex"
 
-RUN npm install -g @openai/codex  && \
+RUN npm install -g @openai/codex           && \
     npm cache clean --force
+# TODO: Implement Playwright support
+#    npm install -g @playwright/cli@latest  && \
+#    playwright-cli install --skills        && \
 
 USER root
 WORKDIR /home/root

@@ -275,7 +275,7 @@ Pass options to the agent:
   directory you already work in.
 
 
-### Agent User Name+Home Matching Host
+### Agent Username+Home Matching Host
 
 Each agent's `Dockerfile` creates a specific OS user for the agent to run under.
 This user has the same name and home directory as the user you're running under
