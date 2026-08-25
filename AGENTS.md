@@ -13,15 +13,19 @@ See also `README.md` for human-readable description and feature intention.
 │
 ├── /src                            # Project source files.
 │   ├── /containers                 # Agents container configuration.
+│   │   ├── _shared                 # Shard agent container configuration files.
+│   │   │   ├── bootstrap-hosts.sh  # Copied to each built container, this script appends records to the container's
+│   │   │   │                       # /etc/hosts on each invocation.
+│   │   │   ├── build-common.sh     # Common code sourced by each <agent-name>/build.sh script.
+│   │   │   ├── playwright-cli-config.json  # Config file for Playwright, copied to ~/.playwright/cli.config.json
+│   │   │   └── playwright-Dockerfile-tail  # Dockerfile code to append to all <agent-name>/Dockerfile before building.
 │   │   ├── <agent-name>            # Agent container configuration.
 │   │   │   ├── <!* directories>    # Agent configuration directories, mapped to their container.
 │   │   │   │                       # In this project, all these directories are empty.
 │   │   │   ├── build.sh            # Bash script to build the container.
 │   │   │   ├── Dockerfile          # Container setup instructions.
 │   │   │   └── Dockerfile.dockerignore  # File+directory exclusions for building.
-│   │   ├── bootstrap-hosts.sh      # Copied to each built container, this script appends records to the container's
-│   │   │                           # /etc/hosts on each invocation.
-│   │   └── build-all.sh            # Iterate through all sub-directories and invoke their build.sh.
+│   │   └── build-all.sh            # Iterate through all sub-directories (except _shared) and invoke their build.sh.
 │   ├── agent-start                 # Main agent start bash script. Usually not invoked directly.
 │   ├── agy                         # Bash script that calls agent-start to start Google Antigravity.
 │   ├── antigravity                 # Bash script that calls agent-start to start Google Antigravity.

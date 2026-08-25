@@ -29,13 +29,14 @@ then
 fi
 
 
-# Run the actual default command (CMD)
+# Determine AGENT_HOME and AGENT_USER
 # ===========================================================================
 
 home_dir=""
 
 for dir in /Users/*/ /home/*/
 do
+	[ -d "$dir" ]  ||  continue
 	[[ "$dir" == "/home/root/" ]]  &&  continue
 	home_dir="${dir%/}"
 	break
@@ -43,6 +44,39 @@ done
 
 AGENT_HOME="${home_dir:-/home/agent}"
 AGENT_USER="${AGENT_HOME##*/}"
+
+
+# Scan all skills shells and add executable bit
+# ===========================================================================
+
+for skills_dir in                          \
+    "$AGENT_HOME/.codex/skills"            \
+    "$AGENT_HOME/.claude/skills"           \
+    "$AGENT_HOME/.gemini/skills"           \
+    "$AGENT_HOME/.vibe/skills/"            \
+    "$AGENT_HOME/.config/opencode/skills"  \
+    "$AGENT_HOME/.agents/skills"
+do
+    [ -d "$dir" ]  ||  continue
+
+    for scripts_dir in "$skills_dir"/*/scripts
+    do
+		[ -d "$scripts_dir" ] || continue
+
+		find "$scripts_dir" -type f ! -executable -exec sh -c '
+			for file do
+				IFS= read -r firstline < "$file" || continue
+				case "$firstline" in
+					"#!"*) chmod +x "$file" ;;
+				esac
+			done
+		' sh {} +
+	done
+done
+
+
+# Run the actual default command (CMD)
+# ===========================================================================
 
 exec setpriv               \
 	--reuid="$AGENT_USER"  \

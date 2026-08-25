@@ -533,7 +533,7 @@ case $agent_container in
 				)
 		fi
 		exec container run "${tty_args[@]}" --rm                                     \
-			--cpus 2 --memory 2G                                                     \
+			--cpus 2 --memory 3G                                                     \
 			--progress none                                                          \
 			"${volumes[@]}"                                                          \
 			--volume "$CONTAINERS_DIR/claude/!claude:$AGENT_HOME/.claude"            \
@@ -563,7 +563,7 @@ case $agent_container in
 				)
 		fi
 		exec container run "${tty_args[@]}" --rm                        \
-			--cpus 2 --memory 1G                                        \
+			--cpus 2 --memory 2G                                        \
 			--progress none                                             \
 			"${volumes[@]}"                                             \
 			--volume "$CONTAINERS_DIR/codex/!codex:$AGENT_HOME/.codex"  \
@@ -595,7 +595,7 @@ case $agent_container in
 				)
 		fi
 		exec container run "${tty_args[@]}" --rm                                \
-			--cpus 2 --memory 1G                                                \
+			--cpus 2 --memory 2G                                                \
 			--progress none                                                     \
 			"${volumes[@]}"                                                     \
 			--volume "$CONTAINERS_DIR/antigravity/!gemini:$AGENT_HOME/.gemini"  \
@@ -627,7 +627,7 @@ case $agent_container in
 				)
 		fi
 		exec container run "${tty_args[@]}" --rm                           \
-			--cpus 2 --memory 1G                                           \
+			--cpus 2 --memory 2G                                           \
 			--progress none                                                \
 			"${volumes[@]}"                                                \
 			--volume "$CONTAINERS_DIR/gemini/!gemini:$AGENT_HOME/.gemini"  \
@@ -659,7 +659,7 @@ case $agent_container in
 				)
 		fi
 		exec container run "${tty_args[@]}" --rm                     \
-			--cpus 2 --memory 2G                                     \
+			--cpus 2 --memory 3G                                     \
 			--progress none                                          \
 			"${volumes[@]}"                                          \
 			--volume "$CONTAINERS_DIR/vibe/!vibe:$AGENT_HOME/.vibe"  \
@@ -687,7 +687,7 @@ case $agent_container in
 				)
 		fi
 		exec container run "${tty_args[@]}" --rm                             \
-			--cpus 2 --memory 2G                                             \
+			--cpus 2 --memory 3G                                             \
 			--progress none                                                  \
 			"${volumes[@]}"                                                  \
 			--volume "$CONTAINERS_DIR/opencode/!cache:$AGENT_HOME/.cache"    \

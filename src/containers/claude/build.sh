@@ -1,23 +1,12 @@
 #!/bin/bash
 set -e
 
-if ! container system status &>/dev/null
-then
-  container system start
-fi
+MY_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+source "$MY_DIR/../_shared/build-common.sh"
 
-# container system property set build.rosetta false
-if [ ! -f ~/.config/container/config.toml ]
-then
-	echo "Run parent 'build-all.sh' to create '~/.config/container/config.toml'."
-	exit 0
-fi
-
-cp -f ../bootstrap-hosts.sh .
-
-container build --no-cache --tag agent-claude  \
-	--build-arg AGENT_USER="$USER"             \
-	--build-arg AGENT_HOME="$HOME"             \
+container build --no-cache --file Dockerfile.build  \
+	--tag agent-claude                              \
+	--target "$TARGET"                              \
+	--build-arg AGENT_USER="$USER"                  \
+	--build-arg AGENT_HOME="$HOME"                  \
 	.
-
-rm ./bootstrap-hosts.sh

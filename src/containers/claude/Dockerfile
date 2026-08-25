@@ -1,4 +1,4 @@
-FROM almalinux:10-minimal
+FROM almalinux:10-minimal AS base
 
 ARG AGENT_USER
 ARG AGENT_HOME

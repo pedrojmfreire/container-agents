@@ -1,0 +1,11 @@
+{
+  "browser": {
+	"browserName": "chromium",
+	"launchOptions": {
+	  "args": [
+		"--allow-file-access-from-files"
+	  ]
+	}
+  },
+  "allowUnrestrictedFileAccess": true
+}

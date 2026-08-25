@@ -1,0 +1,53 @@
+# This file is appended at the end of each agent's Dockerfile, before "container build ..."
+
+# Playwright support
+FROM base AS playwright
+
+RUN microdnf -y install \
+		chromium \
+		webkit2gtk4.1 \
+		gstreamer1-plugins-base \
+		gstreamer1-plugins-good \
+		nss \
+		freetype \
+		alsa-lib \
+		libX11 \
+		libXcomposite \
+		libXcursor \
+		libXdamage \
+		libXext \
+		libXi \
+		libXtst \
+		cups-libs \
+		libXrandr \
+		pango \
+		at-spi2-atk \
+		libdrm \
+		mesa-libgbm                                            && \
+    # Cleanup: \
+    microdnf clean all
+
+# Playwright support:
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+ENV PLAYWRIGHT_MCP_BROWSER=chromium
+ENV CHROME_PATH=/usr/bin/chromium-browser
+
+RUN mkdir -p                           $AGENT_HOME/.playwright  &&  \
+    chown -R "$AGENT_USER:$AGENT_USER" $AGENT_HOME/.playwright
+
+USER     "$AGENT_USER"
+WORKDIR  "$AGENT_HOME"
+
+COPY --chown="$AGENT_USER:$AGENT_USER"  "playwright-cli-config.json"  "$AGENT_HOME/.playwright/cli.config.json"
+
+RUN npm install -g @playwright/cli@latest    && \
+    playwright-cli install --skills          && \
+    playwright-cli install-browser chromium  && \
+    npm cache clean --force
+# TODO: Move base image to Ubuntu/Debian to properly support Playwright with WebKit (for all agents)
+#    playwright-cli install-browser webkit    && \
+
+USER root
+WORKDIR /home/root
+ENTRYPOINT ["/home/root/bootstrap-hosts.sh"]
+CMD        ["codex"]

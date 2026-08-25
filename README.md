@@ -155,12 +155,12 @@ vibe
 opencode
 ```
 
-Be sure to run your agents with `---link` to soft-link the
+Be sure to run your agents with `---link` once to soft-link the
 `src/containers/<agent>/!*` directories and files to their proper
 `~/.config` and `~/.local`, etc., locations.
 
-The wrappers are tiny scripts that all delegate to `src/agent-start`. You can
-also call the main launcher directly:
+The wrappers are tiny scripts that all delegate to `src/agent-start`.
+You can also call the main launcher directly:
 
 ```bash
 agent-start ---agent=codex
@@ -201,6 +201,20 @@ volume paths to match where you keep each agent's config, auth, and session
 state. The checked-in `Dockerfile.dockerignore` files intentionally exclude
 logs, caches, histories, sessions, and auth databases so they do not become part
 of built images.
+
+
+#### Pre-Installed Tools
+
+There are pre-installed tools in each container.
+Be sure to edit your agent's config (initially empty) to add support for:
+- [Microsoft's Playwright-CLI](https://playwright.dev)
+  - If using shared skills (i.e., `AI_SKILLS_DIR` is not empty), then
+    shell into any container (e.g., `claude ---sh`) and type `playwright-cli install --skills=agents -g`
+  - If not using shared skills:
+    - In Codex, type `$skill-installer playwright`
+    - In Claude, shell into the container (`claude ---sh`) and type `playwright-cli install --skills`
+    - In Antigravity, Gemini, Vibe: use the same method as for shared skills
+    - OpenCode should auto-detect Playwright-CLI.
 
 
 ## Daily Usage
