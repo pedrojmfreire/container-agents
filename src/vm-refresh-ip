@@ -71,13 +71,20 @@ get_vm_hostnames()
 }
 
 
-get_vm_subnet()
+get_vm_subnets()
 {
     local ip="$1"
 
     awk -F. '
-        NF == 4 {
-            printf "%s.%s.%s", $1, $2, $3
+        NF == 4 && $3 ~ /^[0-9]+$/ {
+            printf "%s.%s.%s\n", $1, $2, $3
+
+            if ($3 > 0)
+                printf "%s.%s.%s\n", $1, $2, $3 - 1
+
+            if ($3 < 255)
+                printf "%s.%s.%s\n", $1, $2, $3 + 1
+
             exit
         }
     ' <<< "$ip"
@@ -114,7 +121,7 @@ find_vm_ip()
     tmp="$(mktemp)"
 
     #
-    # Probe the current /24 subnet concurrently.
+    # Probe the candidate /24 subnet concurrently.
     #
     # Failures are expected: almost every address will either have no host
     # or no SSH server. Therefore each background probe explicitly succeeds.
@@ -158,7 +165,7 @@ find_vm_ip()
         echo "ERROR: SSH host key matched multiple IP addresses:" >&2
         cat "$tmp" >&2
         rm -f "$tmp"
-        return 1
+        return 2
     fi
 
     cat "$tmp"
@@ -228,12 +235,12 @@ if [[ -z "$VM_IP_CURRENT" ]]; then
 fi
 
 #
-# Derive the subnet from the current address.
+# Derive candidate subnets from the current address.
 #
-VM_SUBNET="$(get_vm_subnet "$VM_IP_CURRENT")"
+VM_SUBNETS="$(get_vm_subnets "$VM_IP_CURRENT")"
 
-if [[ -z "$VM_SUBNET" ]]; then
-    echo "ERROR: Could not determine subnet from ${VM_IP_CURRENT}." >&2
+if [[ -z "$VM_SUBNETS" ]]; then
+    echo "ERROR: Could not determine subnets from ${VM_IP_CURRENT}." >&2
     exit 1
 fi
 
@@ -250,7 +257,10 @@ fi
 echo
 echo "Current configuration:"
 echo "    IP:     ${VM_IP_CURRENT}"
-echo "    Subnet: ${VM_SUBNET}.0/24"
+echo "    Subnets:"
+while IFS= read -r subnet; do
+    echo "        ${subnet}.0/24"
+done <<< "$VM_SUBNETS"
 echo "    Hosts:  ${VM_HOSTNAMES}"
 
 #
@@ -264,13 +274,30 @@ VM_SSH_FINGERPRINT="$(get_vm_fingerprint)"
 echo "    ${VM_SSH_FINGERPRINT}"
 
 #
-# Search the subnet for a server presenting that same SSH host key.
+# Search each candidate subnet for a server presenting that same SSH host key.
 #
 echo
-echo "Searching ${VM_SUBNET}.0/24..."
 
-if ! VM_IP_NEW="$(find_vm_ip "$VM_SSH_FINGERPRINT" "$VM_SUBNET")"; then
-    echo "ERROR: Could not find ${VM_HOST} on ${VM_SUBNET}.0/24." >&2
+VM_IP_NEW=""
+
+while IFS= read -r subnet; do
+    VM_SEARCH_STATUS=0
+
+    echo "Searching ${subnet}.0/24..."
+
+    VM_IP_NEW="$(find_vm_ip "$VM_SSH_FINGERPRINT" "$subnet")" || VM_SEARCH_STATUS="$?"
+
+    if [[ "$VM_SEARCH_STATUS" -eq 0 ]]; then
+        break
+    fi
+
+    if [[ "$VM_SEARCH_STATUS" -gt 1 ]]; then
+        exit 1
+    fi
+done <<< "$VM_SUBNETS"
+
+if [[ -z "$VM_IP_NEW" ]]; then
+    echo "ERROR: Could not find ${VM_HOST} on any candidate subnet." >&2
     exit 1
 fi
 
