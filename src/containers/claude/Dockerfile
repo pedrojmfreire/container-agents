@@ -5,19 +5,20 @@ ARG AGENT_HOME
 
 
 RUN microdnf -y update                                         && \
-    microdnf -y install shadow-utils                           && \
+    microdnf -y install shadow-utils procps-ng                 && \
     microdnf -y install git openssh-clients                    && \
 	microdnf -y install grep sed gawk                          && \
 	microdnf -y install curl rsync tar gzip unzip              && \
 	microdnf -y install gcc-c++ make libxslt                   && \
-	microdnf -y install net-tools whois nc                     && \
-	microdnf -y install jq                                     && \
+	microdnf -y install net-tools bind-utils whois nc          && \
+	microdnf -y install jq sqlite                              && \
 	microdnf -y install bubblewrap                             && \
 	microdnf -y install epel-release                           && \
 	microdnf -y install --enablerepo=epel yq                   && \
     curl -fsSL https://rpm.nodesource.com/setup_22.x | bash -  && \
     microdnf -y install nodejs                                 && \
     microdnf clean all
+    # NodeJS required for "npx" command for MCP servers
 
 	# Add tools required for your development,
 	# that may need to be invoked by the agent
