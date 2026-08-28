@@ -26,13 +26,22 @@ fi
 # container system property set build.rosetta false
 if [ ! -f ~/.config/container/config.toml ]
 then
+
 	mkdir -p ~/.config/container
 	cat >> ~/.config/container/config.toml << 'EOF'
 [build]
 rosetta = false
-[dns]
-domain = "container"
 EOF
+
+	if [[ -f "$HOME/dev-env.sh" ]]
+    then
+    	source "$HOME/dev-env.sh"
+		cat >> ~/.config/container/config.toml << 'EOF'
+[dns]
+domain = "$DEV_ENV_CONTAINERS_DNS_TLD"
+EOF
+    fi
+
 	container system stop
 	container system start
 fi

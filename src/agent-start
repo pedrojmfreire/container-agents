@@ -18,6 +18,11 @@ PROJECT_DIRS=(
 # Note: This should be an absolute path! Replace before running!
 CONTAINERS_DIR="./src/containers"
 
+# DNS TLD for accessing containers from the host
+# (e.g.: container named "codex" will have FQDN "codex.$CONTAINERS_DNS_TLD")
+CONTAINERS_DNS_TLD="container"
+
+
 LOCALHOST_DNS_ALIAS=host.container.internal
 LOCALHOST_IP_ALIAS=203.0.113.113
 # https://github.com/apple/container/blob/main/docs/host-integration.md#access-a-host-service-from-a-container
@@ -44,11 +49,12 @@ AI_SKILLS_DIR=
 
 if [[ -f "$HOME/dev-env.sh" ]]
 then
-	. "$HOME/dev-env.sh"
+	source "$HOME/dev-env.sh"
 
 	((${#DEV_ENV_PROJECT_DIRS[@]}))  &&  PROJECT_DIRS=("${DEV_ENV_PROJECT_DIRS[@]}")
 
 	CONTAINERS_DIR="${DEV_ENV_CONTAINERS_DIR:-$CONTAINERS_DIR}"
+	CONTAINERS_DNS_TLD="${DEV_ENV_CONTAINERS_DNS_TLD:-$CONTAINERS_DNS_TLD}"
 
 	LOCALHOST_DNS_ALIAS="${DEV_ENV_LOCALHOST_DNS_ALIAS:-$LOCALHOST_DNS_ALIAS}"
 	LOCALHOST_IP_ALIAS="${DEV_ENV_LOCALHOST_IP_ALIAS:-$LOCALHOST_IP_ALIAS}"
@@ -373,7 +379,7 @@ done
 
 WORKSPACE="$(pwd)"
 
-if [ ! $has_no_mapping ]
+if ! $has_no_mapping
 then
 	if [ "$WORKSPACE" == "$HOME" ] || [ "$WORKSPACE" == "$HOME/Documents" ]
 	then
@@ -394,7 +400,7 @@ fi
 # ===========================================================================
 
 is_whitelisted=false
-if [ ! $has_no_mapping ]
+if ! $has_no_mapping
 then
 	for whitelist_dir in "${PROJECT_DIRS[@]}"
 	do
@@ -423,7 +429,13 @@ fi
 
 CONTAINER_WORKSPACE="$AGENT_HOME${WORKSPACE#"$HOME"}"
 
-if $has_no_mapping || ! $is_whitelisted
+if $has_no_mapping
+then
+
+	volumes=()
+	workdir=$AGENT_HOME
+
+elif ! $is_whitelisted
 then
 
 	volumes=(--volume "$WORKSPACE:$AGENT_HOME/workspace")
@@ -500,13 +512,44 @@ fi
 
 # Start the DNS records for accessing the host's localhost inside the container
 # ===========================================================================
+# TODO: Review using "container system dns ..." no earlier than 2027, to evaluate it against copying /etc/hosts
+# This is failing (2026-08), likely due to bugs:
+# https://github.com/apple/container/issues/817
+# https://github.com/apple/container/issues/1794
+#
+#if $has_host_localhost_access  &&  ! container system dns ls --quiet | grep -Fxq "$LOCALHOST_DNS_ALIAS"
+#then
+#	echo "Recreating container->host DNS record '$LOCALHOST_DNS_ALIAS' (requires sudo)"
+#	# sudo container system dns delete "$LOCALHOST_DNS_ALIAS"  >/dev/null 2>&1  ||  true
+#	sudo container system dns create "$LOCALHOST_DNS_ALIAS" --localhost "$LOCALHOST_IP_ALIAS"
+#fi
 if $has_host_localhost_access
 then
-	echo "Recreating DNS record '$LOCALHOST_DNS_ALIAS' (requires sudo)"
+	echo "Recreating container->host DNS record '$LOCALHOST_DNS_ALIAS' (requires sudo)"
 	sudo container system dns delete "$LOCALHOST_DNS_ALIAS"  >/dev/null 2>&1  ||  true
 	sudo container system dns create "$LOCALHOST_DNS_ALIAS" --localhost "$LOCALHOST_IP_ALIAS"
 fi
 
+
+# Start the DNS records for accessing the containers from the host
+# ===========================================================================
+# TODO: Review using "container system dns ..." no earlier than 2027, to evaluate it against copying /etc/hosts
+# This is failing (2026-08), likely due to bugs:
+# https://github.com/apple/container/issues/817
+# https://github.com/apple/container/issues/1794
+#
+#if ! container system dns ls --quiet | grep -Fxq "$CONTAINERS_DNS_TLD"
+#then
+#	echo "Recreating host->container DNS TLD record '$CONTAINERS_DNS_TLD' (requires sudo)"
+#	# sudo container system dns delete "$CONTAINERS_DNS_TLD"  >/dev/null 2>&1  ||  true
+#	sudo container system dns create "$CONTAINERS_DNS_TLD"
+#fi
+if [ "$agent_container" == "agent-n8n" ]
+then
+	echo "Recreating host->container DNS TLD record '$CONTAINERS_DNS_TLD' (requires sudo)"
+	sudo container system dns delete "$CONTAINERS_DNS_TLD"  >/dev/null 2>&1  ||  true
+	sudo container system dns create "$CONTAINERS_DNS_TLD"
+fi
 
 # Prepare the hosts alias file to be sent to the container
 # ===========================================================================
@@ -564,6 +607,7 @@ case $agent_container in
 			--env COLORTERM                                                          \
 			--env TERM                                                               \
 			"${agent_env[@]}"                                                        \
+			--name "claude"                                                          \
 			"$agent_container" "$agent_exec" "${agent_args[@]}" "${cli_args[@]}"
 		;;
 
@@ -592,6 +636,7 @@ case $agent_container in
 			--env COLORTERM                                             \
 			--env TERM                                                  \
 			"${agent_env[@]}"                                           \
+			--name "codex"                                              \
 			"$agent_container" "$agent_exec" "${agent_args[@]}" "${cli_args[@]}"
 		;;
 
@@ -624,6 +669,7 @@ case $agent_container in
 			--env COLORTERM                                                     \
 			--env TERM                                                          \
 			"${agent_env[@]}"                                                   \
+			--name "antigravity"                                                \
 			"$agent_container" "$agent_exec" "${agent_args[@]}" "${cli_args[@]}"
 		;;
 
@@ -656,6 +702,7 @@ case $agent_container in
 			--env COLORTERM                                                \
 			--env TERM                                                     \
 			"${agent_env[@]}"                                              \
+			--name "gemini"                                                \
 			"$agent_container" "$agent_exec" "${agent_args[@]}" "${cli_args[@]}"
 		;;
 
@@ -688,6 +735,7 @@ case $agent_container in
 			--env COLORTERM                                          \
 			--env TERM                                               \
 			"${agent_env[@]}"                                        \
+			--name "vibe"                                            \
 			"$agent_container" "$agent_exec" "${agent_args[@]}" "${cli_args[@]}"
 		;;
 
@@ -718,13 +766,11 @@ case $agent_container in
 			--env COLORTERM                                                  \
 			--env TERM                                                       \
 			"${agent_env[@]}"                                                \
+			--name "opencode"                                                \
 			"$agent_container" "$agent_exec" "${agent_args[@]}" "${cli_args[@]}"
 		;;
 
 	"agent-n8n")
-		echo "Recreating DNS record 'n8n.container' (requires sudo)"
-		sudo container system dns delete "container"  >/dev/null 2>&1  ||  true
-		sudo container system dns create "container"
 		if $has_ssh_access
 		then
 			volumes+=(
@@ -734,18 +780,18 @@ case $agent_container in
 				--volume "$HOME/.ssh/known_hosts_agents:$AGENT_HOME/.ssh/known_hosts:ro"
 				)
 		fi
-		exec container run "${tty_args[@]}" --rm                             \
-			--cpus 2 --memory 3G                                             \
-			--progress none                                                  \
-			--name "n8n"                                                     \
-			"${volumes[@]}"                                                  \
-			--volume "$CONTAINERS_DIR/n8n/!n8n:$AGENT_HOME/.n8n"             \
-			--workdir "$workdir"                                             \
-			--env LOCALHOST_DNS_ALIAS="$LOCALHOST_DNS_ALIAS"                 \
-			--env LOCALHOST_IP_ALIAS="$LOCALHOST_IP_ALIAS"                   \
-			--env COLORTERM                                                  \
-			--env TERM                                                       \
-			"${agent_env[@]}"                                                \
+		exec container run "${tty_args[@]}" --rm                  \
+			--cpus 2 --memory 3G                                  \
+			--progress none                                       \
+			"${volumes[@]}"                                       \
+			--volume "$CONTAINERS_DIR/n8n/!n8n:$AGENT_HOME/.n8n"  \
+			--workdir "$workdir"                                  \
+			--env LOCALHOST_DNS_ALIAS="$LOCALHOST_DNS_ALIAS"      \
+			--env LOCALHOST_IP_ALIAS="$LOCALHOST_IP_ALIAS"        \
+			--env COLORTERM                                       \
+			--env TERM                                            \
+			"${agent_env[@]}"                                     \
+			--name "n8n"                                          \
 			"$agent_container" "$agent_exec" "${agent_args[@]}" "${cli_args[@]}"
 		;;
 

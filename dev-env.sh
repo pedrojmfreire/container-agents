@@ -12,6 +12,10 @@ DEV_ENV_PROJECT_DIRS=(
 # Note: This should be an absolute path! Replace before running!
 DEV_ENV_CONTAINERS_DIR="./src/containers"
 
+# DNS TLD for accessing containers from the host
+# (e.g.: container named "codex" will have FQDN "codex.$DEV_ENV_CONTAINERS_DNS_TLD")
+DEV_ENV_CONTAINERS_DNS_TLD="container"
+
 
 DEV_ENV_LOCALHOST_DNS_ALIAS=host.container.internal
 DEV_ENV_LOCALHOST_IP_ALIAS=203.0.113.113
