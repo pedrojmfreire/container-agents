@@ -85,6 +85,7 @@ is_single_project=true
 has_ssh_access=false
 has_vm_access=false
 has_host_localhost_access=false
+has_no_mapping=false
 
 dot=.
 aka=" "
@@ -183,6 +184,18 @@ do
 				"$HOME/.local/share/opentui"   "$CONTAINERS_DIR/opencode/!local/share/opentui"
 			)
 			;;
+		".---agent=n8n"|"${dot}n8n")
+			agent_container=agent-n8n
+			agent_env=(--env N8N_SECURE_COOKIE=false)
+			agent_env_unsafe=()
+			agent_exec=n8n
+			agent_args=()
+			agent_args_unsafe=()
+			agent_home_paths=(
+				"$HOME/.n8n"  "$CONTAINERS_DIR/n8n/!n8n"
+			)
+			has_no_mapping=true
+			;;
 		".---help"|"${dot}-h"|"${dot}--help")
 			echo
 			echo "Usage:"
@@ -190,7 +203,7 @@ do
 			echo
 			echo "Options:"
 			echo "  ---agent=<agent>  Select the agent to use (mandatory). ${aka:+"a.k.a. just <agent>."}"
-			echo "                    Supported agents: claude, codex, antigravity, agy, gemini, vibe, opencode."
+			echo "                    Supported agents: claude, codex, antigravity, agy, gemini, vibe, opencode, n8n."
 			echo "  ---all            Map all project dirs (\$PROJECT_DIRS) to allow the agent to work across"
 			echo "                    projects. ${aka:+"a.k.a. -a, --all."}"
 			echo "  ---sh             Run the container shell, not the agent itself."
@@ -360,16 +373,19 @@ done
 
 WORKSPACE="$(pwd)"
 
-if [ "$WORKSPACE" == "$HOME" ] || [ "$WORKSPACE" == "$HOME/Documents" ]
+if [ ! $has_no_mapping ]
 then
-	echo
-	echo "You're running me from ~ or ~/Documents."
-	echo "All of your documents will be shared with the agent."
-	echo "Proceed? [N]"
-	read -r confirm
-	if [ "$confirm" != "Y" ]  &&  [ "$confirm" != "y" ]
+	if [ "$WORKSPACE" == "$HOME" ] || [ "$WORKSPACE" == "$HOME/Documents" ]
 	then
-		exit 1
+		echo
+		echo "You're running me from ~ or ~/Documents."
+		echo "All of your documents will be shared with the agent."
+		echo "Proceed? [N]"
+		read -r confirm
+		if [ "$confirm" != "Y" ]  &&  [ "$confirm" != "y" ]
+		then
+			exit 1
+		fi
 	fi
 fi
 
@@ -378,16 +394,19 @@ fi
 # ===========================================================================
 
 is_whitelisted=false
-for whitelist_dir in "${PROJECT_DIRS[@]}"
-do
-	if [[ "$WORKSPACE" == "$whitelist_dir" || "$WORKSPACE" == "$whitelist_dir/"* ]]
-	then
-		is_whitelisted=true
-		agent_env+=("${agent_env_unsafe[@]}")
-		agent_args+=("${agent_args_unsafe[@]}")
-		break
-	fi
-done
+if [ ! $has_no_mapping ]
+then
+	for whitelist_dir in "${PROJECT_DIRS[@]}"
+	do
+		if [[ "$WORKSPACE" == "$whitelist_dir" || "$WORKSPACE" == "$whitelist_dir/"* ]]
+		then
+			is_whitelisted=true
+			agent_env+=("${agent_env_unsafe[@]}")
+			agent_args+=("${agent_args_unsafe[@]}")
+			break
+		fi
+	done
+fi
 
 
 # Start Apple Container system
@@ -404,7 +423,7 @@ fi
 
 CONTAINER_WORKSPACE="$AGENT_HOME${WORKSPACE#"$HOME"}"
 
-if ! $is_whitelisted
+if $has_no_mapping || ! $is_whitelisted
 then
 
 	volumes=(--volume "$WORKSPACE:$AGENT_HOME/workspace")
@@ -693,6 +712,34 @@ case $agent_container in
 			--volume "$CONTAINERS_DIR/opencode/!cache:$AGENT_HOME/.cache"    \
 			--volume "$CONTAINERS_DIR/opencode/!config:$AGENT_HOME/.config"  \
 			--volume "$CONTAINERS_DIR/opencode/!local:$AGENT_HOME/.local"    \
+			--workdir "$workdir"                                             \
+			--env LOCALHOST_DNS_ALIAS="$LOCALHOST_DNS_ALIAS"                 \
+			--env LOCALHOST_IP_ALIAS="$LOCALHOST_IP_ALIAS"                   \
+			--env COLORTERM                                                  \
+			--env TERM                                                       \
+			"${agent_env[@]}"                                                \
+			"$agent_container" "$agent_exec" "${agent_args[@]}" "${cli_args[@]}"
+		;;
+
+	"agent-n8n")
+		echo "Recreating DNS record 'n8n.container' (requires sudo)"
+		sudo container system dns delete "n8n"  >/dev/null 2>&1  ||  true
+		sudo container system dns create "n8n"
+		if $has_ssh_access
+		then
+			volumes+=(
+				--volume "$HOME/.ssh/ssh-agent-n8n.pem:$AGENT_HOME/.ssh/ssh-agent-n8n.pem:ro"
+				--volume "$HOME/.ssh/ssh-agent-n8n.pem.pub:$AGENT_HOME/.ssh/ssh-agent-n8n.pem.pub:ro"
+				--volume "$HOME/.ssh/config-agent-n8n:$AGENT_HOME/.ssh/config:ro"
+				--volume "$HOME/.ssh/known_hosts_agents:$AGENT_HOME/.ssh/known_hosts:ro"
+				)
+		fi
+		exec container run "${tty_args[@]}" --rm                             \
+			--cpus 2 --memory 3G                                             \
+			--progress none                                                  \
+			--name "n8n"                                                     \
+			"${volumes[@]}"                                                  \
+			--volume "$CONTAINERS_DIR/n8n/!n8n:$AGENT_HOME/.n8n"             \
 			--workdir "$workdir"                                             \
 			--env LOCALHOST_DNS_ALIAS="$LOCALHOST_DNS_ALIAS"                 \
 			--env LOCALHOST_IP_ALIAS="$LOCALHOST_IP_ALIAS"                   \

@@ -1,11 +1,14 @@
 #!/bin/bash
 set -e
 
-MY_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-source "$MY_DIR/../_shared/build-common-code-agents.sh"
+cp -f ../_shared/bootstrap-hosts.sh .
+trap 'rm       ./bootstrap-hosts.sh' EXIT
 
-container build --no-cache --file Dockerfile.build  \
-	--tag agent-claude                              \
+MY_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+source "$MY_DIR/../_shared/build-common.sh"
+
+container build --no-cache --file Dockerfile        \
+	--tag agent-n8n                                 \
 	--target "$TARGET"                              \
 	--build-arg AGENT_USER="$USER"                  \
 	--build-arg AGENT_HOME="$HOME"                  \

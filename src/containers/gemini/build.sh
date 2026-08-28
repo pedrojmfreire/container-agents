@@ -2,7 +2,7 @@
 set -e
 
 MY_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-source "$MY_DIR/../_shared/build-common.sh"
+source "$MY_DIR/../_shared/build-common-code-agents.sh"
 
 container build --no-cache --file Dockerfile.build  \
 	--tag agent-gemini                              \

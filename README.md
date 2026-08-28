@@ -250,7 +250,7 @@ Usage:
 
 Options:
   ---agent=<agent>  Select the agent to use (mandatory). 
-                    Supported agents: claude, codex, antigravity, agy, gemini, vibe, opencode.
+                    Supported agents: claude, codex, antigravity, agy, gemini, vibe, opencode, n8n.
   ---all            Map all project dirs ($PROJECT_DIRS) to allow the agent to work across
                     projects. 
   ---sh             Run the container shell, not the agent itself. 
