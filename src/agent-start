@@ -19,7 +19,7 @@ PROJECT_DIRS=(
 CONTAINERS_DIR="./src/containers"
 
 # DNS TLD for accessing containers from the host
-# (e.g.: container named "codex" will have FQDN "codex.$CONTAINERS_DNS_TLD")
+# (e.g.: container named "n8n" will have FQDN "n8n.$CONTAINERS_DNS_TLD")
 CONTAINERS_DNS_TLD="container"
 
 
@@ -81,6 +81,56 @@ ALLOW_TRIPLE_DASH_OPTS_ONLY=true
 
 SSH_SOCKET="/tmp/agent-start-vm-tunnel.$UID.sock"
 DNS_ALIAS_LIST="/tmp/agent-start-dns-alias.$UID.txt"
+
+
+# Functions
+# ===========================================================================
+
+CLEANUP_STOPPED_AGENTS()
+{
+	local containers stopped_ids id
+
+	if ! command -v jq >/dev/null 2>&1
+	then
+		echo "Skipping stopped-agent cleanup: install host jq to enable it." >&2
+		return 0
+	fi
+
+	if ! containers=$(container list --all --format json)
+	then
+		echo "Skipping stopped-agent cleanup: could not list containers." >&2
+		return 0
+	fi
+
+	if ! stopped_ids=$(printf '%s\n' "$containers" | jq -r \
+		--arg owner "$UID" --argjson now "$launch_time" '
+		if type != "array" then error("expected a container array") else . end
+		| .[]
+		| select(.configuration.labels["io.container-agents.managed"] == "true")
+		| select(.configuration.labels["io.container-agents.uid"] == $owner)
+		| select((if (.status | type) == "string" then .status else .status.state end) == "stopped")
+		| (.id // .configuration.id) as $id
+		| ($id | capture("^(claude|codex|antigravity|gemini|vibe|opencode)-(?<timestamp>[0-9]{10})-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")) as $name
+		| select(($now - ($name.timestamp | tonumber)) >= 3600)
+		| $id
+	')
+	then
+		echo "Skipping stopped-agent cleanup: could not parse container metadata." >&2
+		return 0
+	fi
+
+	while IFS= read -r id
+	do
+		[ -n "$id" ] || continue
+		# Never force deletion: an instance might have started since listing.
+		if container delete "$id" >/dev/null
+		then
+			echo "Removed stopped agent container: $id" >&2
+		else
+			echo "Could not remove stopped agent container: $id; continuing." >&2
+		fi
+	done <<< "$stopped_ids"
+}
 
 
 # Parse the command-line arguments
@@ -612,6 +662,20 @@ fi
 # Start the AI agent's container
 # ===========================================================================
 
+container_name="${agent_container#agent-}"
+container_labels=()
+if [ "$agent_container" != "agent-n8n" ]
+then
+	launch_time=$(date +%s)
+	launch_uuid=$(uuidgen | tr '[:upper:]' '[:lower:]')
+	container_name="$container_name-$launch_time-$launch_uuid"
+	container_labels=(
+		--label "io.container-agents.managed=true"
+		--label "io.container-agents.uid=$UID"
+	)
+	CLEANUP_STOPPED_AGENTS
+fi
+
 tty_args=(-i)
 [[ -t 0  &&  -t 1 ]]  &&  tty_args+=(-t)
 
@@ -648,7 +712,8 @@ case $agent_container in
 			--env COLORTERM                                                          \
 			--env TERM                                                               \
 			"${agent_env[@]}"                                                        \
-			--name "claude"                                                          \
+			"${container_labels[@]}"                                                 \
+			--name "$container_name"                                                 \
 			"$agent_container" "$agent_exec" "${agent_args[@]}" "${cli_args[@]}"
 		;;
 
@@ -677,7 +742,8 @@ case $agent_container in
 			--env COLORTERM                                             \
 			--env TERM                                                  \
 			"${agent_env[@]}"                                           \
-			--name "codex"                                              \
+			"${container_labels[@]}"                                    \
+			--name "$container_name"                                    \
 			"$agent_container" "$agent_exec" "${agent_args[@]}" "${cli_args[@]}"
 		;;
 
@@ -710,7 +776,8 @@ case $agent_container in
 			--env COLORTERM                                                     \
 			--env TERM                                                          \
 			"${agent_env[@]}"                                                   \
-			--name "antigravity"                                                \
+			"${container_labels[@]}"                                            \
+			--name "$container_name"                                            \
 			"$agent_container" "$agent_exec" "${agent_args[@]}" "${cli_args[@]}"
 		;;
 
@@ -743,7 +810,8 @@ case $agent_container in
 			--env COLORTERM                                                \
 			--env TERM                                                     \
 			"${agent_env[@]}"                                              \
-			--name "gemini"                                                \
+			"${container_labels[@]}"                                       \
+			--name "$container_name"                                       \
 			"$agent_container" "$agent_exec" "${agent_args[@]}" "${cli_args[@]}"
 		;;
 
@@ -776,7 +844,8 @@ case $agent_container in
 			--env COLORTERM                                          \
 			--env TERM                                               \
 			"${agent_env[@]}"                                        \
-			--name "vibe"                                            \
+			"${container_labels[@]}"                                 \
+			--name "$container_name"                                 \
 			"$agent_container" "$agent_exec" "${agent_args[@]}" "${cli_args[@]}"
 		;;
 
@@ -807,7 +876,8 @@ case $agent_container in
 			--env COLORTERM                                                  \
 			--env TERM                                                       \
 			"${agent_env[@]}"                                                \
-			--name "opencode"                                                \
+			"${container_labels[@]}"                                         \
+			--name "$container_name"                                         \
 			"$agent_container" "$agent_exec" "${agent_args[@]}" "${cli_args[@]}"
 		;;
 

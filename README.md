@@ -315,8 +315,39 @@ Pass options to the agent:
 - Keeps runtime auth/session/log state out of images; the images contain tools
   and starter config, while state is persisted across invocations via mounts.
 - Soft-links persisted state to their expected locations in `~`.
+- Gives each coding-agent launch a unique container name, allowing simultaneous sessions.
 - Uses small wrapper scripts, so daily use can be as simple as `codex` from the
   directory you already work in.
+
+### Container names and cleanup
+
+Coding-agent containers use `<agent>-<epoch-seconds>-<lowercase-uuid>` names,
+including launches with `---sh`. The launcher prints the name to stderr so you
+can use it with `container inspect`, `container logs`, or `container stop`.
+Where container DNS is configured, the address follows the generated name:
+`<generated-name>.container` (or your configured DNS TLD). n8n keeps its fixed
+`n8n` name and DNS address. Agent configuration and session state still use the
+existing shared host mounts.
+
+With `jq` installed **on the host**, each coding-agent launch also removes
+stopped coding-agent containers created by this launcher for the same host UID
+and at least one hour old. Ownership labels identify eligible containers;
+unrelated containers and legacy fixed-name containers are left alone. The
+one-hour grace period avoids cleaning up ordinary launches during startup.
+Cleanup never uses forced deletion. Missing `jq` or cleanup failures produce a
+notice and do not prevent launching. Normal exits still use `--rm` for removal.
+
+A disconnected terminal does not prove that a running container is abandoned.
+Running, stopping, and unknown instances are left for manual inspection:
+
+```bash
+container list --all
+container inspect <container-name>
+# When you have finished the running session:
+container stop <container-name>
+# If the stopped container remains:
+container delete <container-name>
+```
 
 
 ### Agent Username+Home Matching Host

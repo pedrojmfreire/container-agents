@@ -13,7 +13,7 @@ DEV_ENV_PROJECT_DIRS=(
 DEV_ENV_CONTAINERS_DIR="./src/containers"
 
 # DNS TLD for accessing containers from the host
-# (e.g.: container named "codex" will have FQDN "codex.$DEV_ENV_CONTAINERS_DNS_TLD")
+# (e.g.: container named "n8n" will have FQDN "n8n.$DEV_ENV_CONTAINERS_DNS_TLD")
 DEV_ENV_CONTAINERS_DNS_TLD="container"
 
 
