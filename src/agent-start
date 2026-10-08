@@ -412,35 +412,37 @@ do
 			break
 			;;
 
-		".--debug-file")
+		# Heuristic per-agent detection of CLI options with file/directory
+		# arguments to ensure mapping to the container
+
+		# Single file/directory argument that may be missing
+		".--debug-file"|".--log-file")
 			cli_args+=("$1")
 			shift
-			[[ "$agent_container" != "agent-claude" ]]  &&  continue
+			[[ "$agent_container" != "agent-claude"          &&  \
+			   "$agent_container" != "agent-antigravity" ]]  &&  continue
 			cli_args+=("$1")
 			volumes+=(--volume "$1:$1")
 			;;
-		".--plugin-dir"|".--settings")
+		# Single file/directory argument that must exist
+		".--plugin-dir"|".--settings"|".-i"|".--image"|".-C"|".--cd"|".--json-schema"|".--workdir"|".import")
 			cli_args+=("$1")
 			shift
-			[[ "$agent_container" != "agent-claude" ]]  &&  continue
+			[[ "$agent_container" != "agent-claude"       &&  \
+               "$agent_container" != "agent-codex"        &&  \
+			   "$agent_container" != "agent-antigravity"  &&  \
+			   "$agent_container" != "agent-vibe"         &&  \
+			   "$agent_container" != "agent-opencode" ]]  &&  continue
 			cli_args+=("$1")
 			[[ -e "$1" ]]  &&  volumes+=(--volume "$1:$1")
 			;;
-		".--COMMA-SEPARATED-OPTION")
-			cli_args+=("$1")
-			shift
-			[[ "$agent_container" != "agent-claude" ]]  &&  continue
-			cli_args+=("$1")
-			IFS=',' read -r -a paths <<< "$1"
-			for path in "${paths[@]}"
-			do
-                [[ -e "$path" ]]  &&  volumes+=(--volume "$path:$path")
-            done
-			;;
+		# Multiple files/directories in multiple arguments
 		".--add-dir")
 			cli_args+=("$1")
 			shift
-			[[ "$agent_container" != "agent-claude" ]]  &&  continue
+			[[ "$agent_container" != "agent-claude"       &&  \
+			   "$agent_container" != "agent-antigravity"  &&  \
+			   "$agent_container" != "agent-vibe" ]]      &&  continue
 			while [[ $# -gt 0 ]]
 			do
 				[[ "$1" == -* ]]  &&  break

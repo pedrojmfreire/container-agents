@@ -315,6 +315,7 @@ Pass options to the agent:
 - Keeps runtime auth/session/log state out of images; the images contain tools
   and starter config, while state is persisted across invocations via mounts.
 - Soft-links persisted state to their expected locations in `~`.
+- Soft-links files and directories specified in CLI options to the container.
 - Gives each coding-agent launch a unique container name, allowing simultaneous sessions.
 - Uses small wrapper scripts, so daily use can be as simple as `codex` from the
   directory you already work in.
