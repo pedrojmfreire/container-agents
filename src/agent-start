@@ -87,6 +87,7 @@ DNS_ALIAS_LIST="/tmp/agent-start-dns-alias.$UID.txt"
 # ===========================================================================
 
 cli_args=()
+volumes=()
 is_single_project=true
 has_ssh_access=false
 has_vm_access=false
@@ -360,6 +361,46 @@ do
 			cli_args+=("$@")
 			break
 			;;
+
+		".--debug-file")
+			cli_args+=("$1")
+			shift
+			[[ "$agent_container" != "agent-claude" ]]  &&  continue
+			cli_args+=("$1")
+			volumes+=(--volume "$1:$1")
+			;;
+		".--plugin-dir"|".--settings")
+			cli_args+=("$1")
+			shift
+			[[ "$agent_container" != "agent-claude" ]]  &&  continue
+			cli_args+=("$1")
+			[[ -e "$1" ]]  &&  volumes+=(--volume "$1:$1")
+			;;
+		".--COMMA-SEPARATED-OPTION")
+			cli_args+=("$1")
+			shift
+			[[ "$agent_container" != "agent-claude" ]]  &&  continue
+			cli_args+=("$1")
+			IFS=',' read -r -a paths <<< "$1"
+			for path in "${paths[@]}"
+			do
+                [[ -e "$path" ]]  &&  volumes+=(--volume "$path:$path")
+            done
+			;;
+		".--add-dir")
+			cli_args+=("$1")
+			shift
+			[[ "$agent_container" != "agent-claude" ]]  &&  continue
+			while [[ $# -gt 0 ]]
+			do
+				[[ "$1" == -* ]]  &&  break
+				cli_args+=("$1")
+				[[ -e "$1" ]]  &&  volumes+=(--volume "$1:$1")
+				shift
+			done
+			continue
+			;;
+
 		*)
 			if $ALLOW_TRIPLE_DASH_OPTS_ONLY
 			then
@@ -432,19 +473,19 @@ CONTAINER_WORKSPACE="$AGENT_HOME${WORKSPACE#"$HOME"}"
 if $has_no_mapping
 then
 
-	volumes=()
+	# volumes+=()
 	workdir=$AGENT_HOME
 
 elif ! $is_whitelisted
 then
 
-	volumes=(--volume "$WORKSPACE:$AGENT_HOME/workspace")
+	volumes+=(--volume "$WORKSPACE:$AGENT_HOME/workspace")
 	workdir=$AGENT_HOME/workspace
 
 elif $is_single_project
 then
 
-	volumes=(--volume "$WORKSPACE:$CONTAINER_WORKSPACE")
+	volumes+=(--volume "$WORKSPACE:$CONTAINER_WORKSPACE")
 	workdir="$CONTAINER_WORKSPACE"
 
 else  # ! $is_single_project
@@ -454,7 +495,7 @@ else  # ! $is_single_project
 	#	~/Documents/...
 	#	../../another_project/...
 
-	volumes=()
+	# volumes+=()
 	for whitelist_dir in "${PROJECT_DIRS[@]}"
 	do
 		container_dir="$AGENT_HOME${whitelist_dir#"$HOME"}"
