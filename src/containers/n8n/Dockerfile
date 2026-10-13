@@ -29,8 +29,8 @@ ENV PATH="$AGENT_HOME/.local/bin:$PATH"
 ENV NPM_CONFIG_PREFIX="$AGENT_HOME/.npm-global"
 ENV PATH="$AGENT_HOME/.npm-global/bin:$AGENT_HOME/node_modules/.bin:$PATH"
 
-RUN mkdir -p                           $AGENT_HOME/.npm-global $AGENT_HOME/.npm  &&  \
-    chown -R "$AGENT_USER:$AGENT_USER" $AGENT_HOME/.npm-global $AGENT_HOME/.npm
+RUN mkdir -p                           $AGENT_HOME/.npm-global $AGENT_HOME/.npm $AGENT_HOME/.n8n/nodes  &&  \
+    chown -R "$AGENT_USER:$AGENT_USER" $AGENT_HOME/.npm-global $AGENT_HOME/.npm $AGENT_HOME/.n8n/nodes
 
 USER "$AGENT_USER"
 WORKDIR "$AGENT_HOME"
@@ -39,9 +39,13 @@ COPY --chown="$AGENT_USER:$AGENT_USER"  "!n8n"  "$AGENT_HOME/.n8n"
 
 RUN npm install -g n8n  && \
     npm cache clean --force
+    #
+    # Note: Due to ~/.n8n mapping to host, will need to install this manually in a container shell session:
+    #       cd $AGENT_HOME/.n8n/nodes  &&  npm i n8n-nodes-webpage-content-extractor
 
 USER root
 WORKDIR /home/root
+ENV NODE_PATH="$AGENT_HOME/.npm-global/lib/node_modules/n8n/node_modules"
 COPY --chown=root:root --chmod=755 bootstrap-hosts.sh /home/root/bootstrap-hosts.sh
 ENTRYPOINT ["/home/root/bootstrap-hosts.sh"]
 CMD        ["n8n"]

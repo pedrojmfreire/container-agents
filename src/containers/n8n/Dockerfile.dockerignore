@@ -3,4 +3,4 @@ backup */
 
 # Runtime state is supplied by the volume mounts. Keeping it out of the image
 # reduces size and avoids baking session/auth/log data into the image.
-\!vibe/logs/
+\!n8n/*.log
