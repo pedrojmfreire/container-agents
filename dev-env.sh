@@ -38,3 +38,9 @@ DEV_ENV_VM_PORTS=(
 DEV_ENV_AI_SKILLS_DIR=
 	# Disabled
 	# Good starting point to enable: "$HOME/.agents/skills"
+
+
+# JetBrain's own local MCP server port for ACP
+# Leave empty to never map this MCP server
+# Find it in Settings -> AI -> MCP Server
+DEV_ENV_JETBRAINS_MCP_PORT=

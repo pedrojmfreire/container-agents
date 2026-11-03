@@ -44,6 +44,11 @@ AI_SKILLS_DIR=
 	# Good starting point to enable: "$HOME/.agents/skills"
 
 
+# JetBrain's own local MCP server port for ACP
+# Find it in Settings -> AI -> MCP Server
+JETBRAINS_MCP_PORT=
+
+
 # Override local configuration with ~/dev-env.sh
 # ===========================================================================
 
@@ -64,6 +69,7 @@ then
 	((${#DEV_ENV_VM_PORTS[@]}))  &&  VM_PORTS=("${DEV_ENV_VM_PORTS[@]}")
 
 	AI_SKILLS_DIR="${DEV_ENV_AI_SKILLS_DIR:-$AI_SKILLS_DIR}"
+	JETBRAINS_MCP_PORT="${DEV_ENV_JETBRAINS_MCP_PORT:-$JETBRAINS_MCP_PORT}"
 fi
 
 
@@ -133,11 +139,33 @@ CLEANUP_STOPPED_AGENTS()
 }
 
 
+FILTER()
+{
+	jq -R -r --unbuffered --arg host "$LOCALHOST_DNS_ALIAS" --arg port "$JETBRAINS_MCP_PORT" '
+		try (
+			fromjson
+			| if .method == "session/new" or .method == "session/load" then
+				.params.mcpServers = (
+					((.params.mcpServers // []) | map(select(.name != "idea")))
+					+ [{ type: "http", name: "idea",
+						url: ("http://" + $host + ":" + $port + "/stream"),
+						headers: [
+							{ name: "IJ_MCP_SERVER_PROJECT_PATH", value: .params.cwd },
+							{ name: "Host", value: ("127.0.0.1:" + $port) }
+						] }]
+				)
+			  else . end
+			| tojson
+		) catch .'
+}
+
+
 # Parse the command-line arguments
 # ===========================================================================
 
 cli_args=()
 volumes=()
+is_acp_invocation=false
 is_single_project=true
 has_ssh_access=false
 has_vm_access=false
@@ -155,14 +183,17 @@ do
 	case ".$1" in
 		".---agent=claude"|".---agent=claude-code"|"${dot}claude"|"${dot}claude-code")
 			agent_container=agent-claude
-			agent_env=(                      \
-				--env DISABLE_UPDATES=1      \
-				--env DISABLE_AUTOUPDATER=1  \
-				--env ANTHROPIC_API_KEY      \
+			agent_env=(                        \
+				--env DISABLE_UPDATES=1        \
+				--env DISABLE_AUTOUPDATER=1    \
+				--env ANTHROPIC_API_KEY        \
+				--env CLAUDE_CODE_OAUTH_TOKEN  \
 			)
 			agent_env_unsafe=()
 			agent_exec=claude
+			agent_exec_acp=claude-agent-acp
 			agent_args=()
+			agent_args_acp=()
 			agent_args_unsafe=(                      \
 				--permission-mode bypassPermissions  \
 				--dangerously-skip-permissions       \
@@ -175,12 +206,16 @@ do
 			;;
 		".---agent=codex"|".---agent=chat-gpt"|"${dot}codex"|"${dot}chatgpt")
 			agent_container=agent-codex
-			agent_env=()
+			agent_env=(             \
+				--env NO_BROWSER=1  \
+			)
 			agent_env_unsafe=()
 			agent_exec=codex
+			agent_exec_acp=codex-acp
 			agent_args=(                                    \
 				--config check_for_update_on_startup=false  \
 			)
+			agent_args_acp=()
 			agent_args_unsafe=(                             \
 				--sandbox danger-full-access                \
 				--dangerously-bypass-approvals-and-sandbox  \
@@ -194,10 +229,15 @@ do
 			agent_env=(--env AGY_CLI_DISABLE_AUTO_UPDATE=true)
 			agent_env_unsafe=()
 			agent_exec=agy
+			agent_exec_acp=agy-acp
 			agent_args=()
+			agent_args_acp=()
 			agent_args_unsafe=(--dangerously-skip-permissions)
 			agent_home_paths=(
-				"$HOME/.gemini"  "$CONTAINERS_DIR/antigravity/!gemini"
+				"$HOME/.gemini"               "$CONTAINERS_DIR/antigravity/!gemini"
+				"$HOME/.agy-acp"              "$CONTAINERS_DIR/antigravity/!agy-acp"
+				"$HOME/.agy-acp-state.json"   "$CONTAINERS_DIR/antigravity/!agy-acp-state.json"
+				"$HOME/.agy-acp-models.json"  "$CONTAINERS_DIR/antigravity/!agy-acp-models.json"
 			)
 			;;
 		".---agent=gemini"|"${dot}gemini")
@@ -205,7 +245,9 @@ do
 			agent_env=()
 			agent_env_unsafe=()
 			agent_exec=gemini
+			agent_exec_acp=gemini
 			agent_args=()
+			agent_args_acp=()
 			agent_args_unsafe=(--yolo)
 			agent_home_paths=(
 				"$HOME/.gemini"  "$CONTAINERS_DIR/gemini/!gemini"
@@ -220,7 +262,9 @@ do
 			)
 			agent_env_unsafe=()
 			agent_exec=vibe
+			agent_exec_acp=vibe-acp
 			agent_args=()
+			agent_args_acp=()
 			agent_args_unsafe=(--yolo)
 			agent_home_paths=(
 				"$HOME/.vibe"  "$CONTAINERS_DIR/vibe/!vibe"
@@ -231,7 +275,9 @@ do
 			agent_env=(--env OPENCODE_DISABLE_AUTOUPDATE=true)
 			agent_env_unsafe=(--env OPENCODE_PERMISSION='{"*":"allow"}')
 			agent_exec=opencode
+			agent_exec_acp=opencode
 			agent_args=()
+			agent_args_acp=(acp)
 			agent_args_unsafe=(--auto)
 			agent_home_paths=(
 				"$HOME/.cache/opencode"        "$CONTAINERS_DIR/opencode/!cache/opencode"
@@ -246,7 +292,9 @@ do
 			agent_env=(--env N8N_SECURE_COOKIE=false)
 			agent_env_unsafe=()
 			agent_exec=n8n
+			agent_exec_acp=n8n
 			agent_args=()
+			agent_args_acp=()
 			agent_args_unsafe=()
 			agent_home_paths=(
 				"$HOME/.n8n"  "$CONTAINERS_DIR/n8n/!n8n"
@@ -268,6 +316,7 @@ do
 			echo "  ---ssh            Map ~/.ssh/* files to allow the agent to access to servers/Virtual Machines. ${aka:+"a.k.a. --sh."}"
 			echo "                    Expects to find: ~/.ssh/ssh-agent-<agent>.pem, ~/.ssh/ssh-agent-<agent>.pem.pub,"
 			echo "                    ~/.ssh/config-agent-<agent>.pem and ~/.ssh/known_hosts_agents."
+			echo "  ---acp            Invoke the agent via ACP. Requires a prior ---local: ACP is incompatible with sudo."
 			echo "  ---local          Create a container DNS '$LOCALHOST_DNS_ALIAS' that maps to the host's localhost,"
 			echo "                    via $LOCALHOST_IP_ALIAS. Required to access Ollama, LM Studio, MTPLX models,"
 			echo "                    VMs, or other services running on the host. This DNS entry is persistent across"
@@ -312,6 +361,11 @@ do
 			;;
 		".---ssh"|"${dot}--ssh")
 			has_ssh_access=true
+			;;
+		".---acp"|"${dot}--acp")
+			is_acp_invocation=true
+			# ACP doesn't have a terminal, and is therefore incompatible with ---local's "sudo" requirement.
+			# has_host_localhost_access=true
 			;;
 		".---local"|"${dot}-l"|"${dot}--local")
 			has_host_localhost_access=true
@@ -404,6 +458,7 @@ do
 			agent_env=()
 			agent_env_unsafe=()
 			agent_args=()
+			agent_args_acp=()
 			agent_args_unsafe=()
 			;;
 		".---"|"${dot}-")
@@ -513,7 +568,7 @@ fi
 
 if ! container system status &>/dev/null
 then
-	container system start
+	container system start  &>/dev/null
 fi
 
 
@@ -555,6 +610,14 @@ else  # ! $is_single_project
 	done
 	workdir="$CONTAINER_WORKSPACE"
 
+fi
+
+
+# Check local IDE configuration to map
+# ===========================================================================
+if [ -d "$HOME/.jetbrains" ]
+then
+	volumes+=(--volume "$HOME/.jetbrains:$AGENT_HOME/.jetbrains")
 fi
 
 
@@ -661,6 +724,27 @@ then
 fi
 
 
+# Adjust startup settings if starting as ACP
+# ===========================================================================
+
+tty_args=(-i)
+
+if $is_acp_invocation
+then
+	agent_exec="$agent_exec_acp"
+	agent_args=( "${agent_args_acp[@]}" )
+
+	# Is the IDE MCP server listening? (any HTTP response counts as up)
+	if [ -n "$JETBRAINS_MCP_PORT" ]  && \
+	   curl -s -o /dev/null --max-time 2 "http://127.0.0.1:$JETBRAINS_MCP_PORT/stream"
+	then
+		exec < <(FILTER)
+	fi
+else
+	[[ -t 0  &&  -t 1 ]]  &&  tty_args+=(-t)
+fi
+
+
 # Start the AI agent's container
 # ===========================================================================
 
@@ -678,8 +762,6 @@ then
 	CLEANUP_STOPPED_AGENTS
 fi
 
-tty_args=(-i)
-[[ -t 0  &&  -t 1 ]]  &&  tty_args+=(-t)
 
 case $agent_container in
 

@@ -38,6 +38,7 @@ WORKDIR "$AGENT_HOME"
 COPY --chown="$AGENT_USER:$AGENT_USER"  "!gemini"  "$AGENT_HOME/.gemini"
 
 RUN curl -fsSL https://antigravity.google/cli/install.sh | bash -  && \
+    AGY_ACP_SKIP_CLI_INSTALL=1 npm install -g agy-acp-bridge       && \
     npm cache clean --force
 
 USER root

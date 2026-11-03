@@ -37,7 +37,8 @@ WORKDIR  "$AGENT_HOME"
 
 COPY --chown="$AGENT_USER:$AGENT_USER"  "!codex"  "$AGENT_HOME/.codex"
 
-RUN npm install -g @openai/codex             && \
+RUN npm install -g @openai/codex                   && \
+    npm install -g @agentclientprotocol/codex-acp  && \
     npm cache clean --force
 
 USER root

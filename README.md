@@ -256,6 +256,7 @@ Options:
   ---sh             Run the container shell, not the agent itself. 
                     Must be defined after ---agent.
   ---ssh            Map ~/.ssh/* files to allow the agent to access to servers/Virtual Machines. 
+  ---acp            Invoke the agent via ACP. Requires a prior ---local: ACP is incompatible with sudo.
   ---local          Create a container DNS 'host.container.internal' that maps to the host's localhost,
                     via 203.0.113.113. Required to access Ollama, LM Studio, MTPLX models,
                     VMs, or other services running on the host. This DNS entry is persistent across
@@ -437,15 +438,41 @@ agent-relevant `~/.config`, `~/.local`, etc., files to the main
 Use this sample JSON with JetBrains' IDEs to invoke OpenCode in a container:
 
 ```json
-{ "default_mcp_settings": {},
+{
+  "default_mcp_settings": {},
   "agent_servers": {
-    "OpenCode in container": {
-      "command":"/<path-to->/opencode",
-      "args": ["---safe", "acp"]
+    "Claude Code": {
+      "command": "/<path-to->/claude",
+      "args": [ "---acp" ],
+      "use_idea_mcp": false
+    },
+    "Codex": {
+      "command": "/<path-to->/codex",
+      "args": [ "---acp" ],
+      "use_idea_mcp": false
+    },
+    "Antigravity": {
+      "command": "/<path-to->/agy",
+      "args": [ "---acp" ],
+      "use_idea_mcp": false
+    },
+    "Mistral Vibe": {
+      "command": "/<path-to->/vibe",
+      "args": [ "---acp", "---safe" ],
+      "use_idea_mcp": false
+    },
+    "OpenCode": {
+      "command": "/<path-to->/opencode",
+      "args": [ "---acp", "---safe" ],
+      "use_idea_mcp": false
     }
   }
 }
 ```
+
+Note: `agent-start` will automatically try to connect to the JetBrains MCP server, but we
+can't have JetBrains' IDEs forcefully specify the address, which is why all agents
+are configured with `"use_idea_mcp": false`.
 
 
 ## Sample Container Images

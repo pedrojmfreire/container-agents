@@ -44,6 +44,7 @@ RUN curl -fsSL https://claude.ai/install.sh | bash -                           &
     npm install -g ccstatusline@latest                                         && \
     (claude plugin marketplace update claude-plugins-official       ||  true)  && \
     (claude plugin install code-simplifier@claude-plugins-official  ||  true)  && \
+    npm install -g @agentclientprotocol/claude-agent-acp                       && \
     npm cache clean --force
 # Needs Claude login/credentials:
 #    claude plugin marketplace update claude-plugins-official
