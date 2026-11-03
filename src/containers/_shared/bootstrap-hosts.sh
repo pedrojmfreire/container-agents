@@ -57,7 +57,7 @@ for skills_dir in                          \
     "$AGENT_HOME/.config/opencode/skills"  \
     "$AGENT_HOME/.agents/skills"
 do
-    [ -d "$dir" ]  ||  continue
+    [ -d "$skills_dir" ]  ||  continue
 
     for scripts_dir in "$skills_dir"/*/scripts
     do

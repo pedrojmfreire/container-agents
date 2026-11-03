@@ -66,6 +66,10 @@ Container-Agents supports the MCP configuration and plugins you prefer:
 just be sure to edit the sample `Dockerfile` for your agent, to ensure
 your favorite setup is pre-installed on the container.
 
+If your favorite IDE has an MCP server (such as [JetBrains IntelliJ](https://www.jetbrains.com/help/idea/mcp-server.html)), and
+Container-Agents detects it running, it will automatically connect
+the agent to it.
+
 You can also have the container talk to MCP servers hosted on the Internet,
 as usual, or to MCP servers running on the local host.
 

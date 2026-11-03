@@ -167,6 +167,7 @@ cli_args=()
 volumes=()
 is_acp_invocation=false
 is_single_project=true
+is_raw=false
 has_ssh_access=false
 has_vm_access=false
 has_host_localhost_access=false
@@ -356,8 +357,11 @@ do
 			;;
 		".---sh"|"${dot}-s"|"${dot}--sh")
 			agent_exec=bash
+			agent_exec_acp=bash
 			agent_args=()
+			agent_args_acp=()
 			agent_args_unsafe=()
+			is_raw=true
 			;;
 		".---ssh"|"${dot}--ssh")
 			has_ssh_access=true
@@ -460,6 +464,7 @@ do
 			agent_args=()
 			agent_args_acp=()
 			agent_args_unsafe=()
+			is_raw=true
 			;;
 		".---"|"${dot}-")
 			shift
@@ -707,6 +712,7 @@ then
 	sudo container system dns create "$CONTAINERS_DNS_TLD"
 fi
 
+
 # Prepare the hosts alias file to be sent to the container
 # ===========================================================================
 if $has_vm_access || $has_host_localhost_access
@@ -724,24 +730,103 @@ then
 fi
 
 
-# Adjust startup settings if starting as ACP
+# Adjust startup settings for ACP and IDE-specific MCP
 # ===========================================================================
 
 tty_args=(-i)
+mcp_jetbrains=false
+volumes_nested=()  # Mounted inside an agent's config directory: must follow it
+
+
+# Is the IDE MCP server listening? (any HTTP response counts as up)
+if $is_whitelisted               && \
+   [ -n "$JETBRAINS_MCP_PORT" ]  && \
+   curl -s -o /dev/null --max-time 2 "http://127.0.0.1:$JETBRAINS_MCP_PORT/stream"
+then
+	mcp_jetbrains=true
+fi
+
 
 if $is_acp_invocation
 then
 	agent_exec="$agent_exec_acp"
 	agent_args=( "${agent_args_acp[@]}" )
 
-	# Is the IDE MCP server listening? (any HTTP response counts as up)
-	if [ -n "$JETBRAINS_MCP_PORT" ]  && \
-	   curl -s -o /dev/null --max-time 2 "http://127.0.0.1:$JETBRAINS_MCP_PORT/stream"
-	then
-		exec < <(FILTER)
-	fi
+	$mcp_jetbrains  &&  exec < <(FILTER)
 else
 	[[ -t 0  &&  -t 1 ]]  &&  tty_args+=(-t)
+	if $mcp_jetbrains  &&  ! $is_raw
+	then
+		ide_url="http://$LOCALHOST_DNS_ALIAS:$JETBRAINS_MCP_PORT/stream"
+		ide_host="127.0.0.1:$JETBRAINS_MCP_PORT"
+		case $agent_container in
+			agent-claude)
+				ide_json=$(jq -nc --arg url "$ide_url" --arg host "$ide_host" --arg path "$CONTAINER_WORKSPACE" \
+					'{mcpServers:{idea:{type:"http",url:$url,
+					  headers:{Host:$host,IJ_MCP_SERVER_PROJECT_PATH:$path}}}}')
+				agent_args=(--mcp-config "$ide_json" "${agent_args[@]}")
+				;;
+			agent-codex)
+				agent_args+=(
+					--config "mcp_servers.idea.url=\"$ide_url\""
+					--config "mcp_servers.idea.http_headers={Host=\"$ide_host\", IJ_MCP_SERVER_PROJECT_PATH=\"$CONTAINER_WORKSPACE\"}"
+				)
+				;;
+			agent-antigravity)
+				# agy has no option or environment variable to add MCP servers, so overlay
+				# its config file with a per-launch copy, to keep the project path out of
+				# the shared config. Changes made to MCP servers inside the agent are lost.
+				# NOTE: agy 1.4.12 doesn't send the Host header, but sends all the others, and
+				# the IDE answers 403 to any other Host. So connect through a forwarder listening
+				# on the container's own loopback, which makes the URL itself carry the right Host.
+				ide_config_dir="$CONTAINERS_DIR/antigravity/!gemini/config"
+				ide_config="$ide_config_dir/mcp_config.json"
+				mkdir -p "$ide_config_dir"
+				[ -s "$ide_config" ]  ||  echo '{"mcpServers":{}}' > "$ide_config"
+				ide_config_copy=$(mktemp "/tmp/agent-start-mcp.$UID.XXXXXX")
+				if jq --arg url "http://$ide_host/stream" --arg path "$CONTAINER_WORKSPACE" \
+					'.mcpServers.idea = {serverUrl:$url,
+					  headers:{IJ_MCP_SERVER_PROJECT_PATH:$path}}' \
+					"$ide_config" > "$ide_config_copy"
+				then
+					volumes_nested+=(--volume "$ide_config_copy:$AGENT_HOME/.gemini/config/mcp_config.json")
+					ide_forwarder="const net = require('net');
+						net.createServer(client => {
+							const server = net.connect($JETBRAINS_MCP_PORT, '$LOCALHOST_DNS_ALIAS');
+							client.pipe(server).pipe(client);
+							client.on('error', () => server.destroy());
+							server.on('error', () => client.destroy());
+						}).listen($JETBRAINS_MCP_PORT, '127.0.0.1');"
+					agent_args=(-c '
+						node -e "$1" < /dev/null &> /dev/null &
+						for _ in {1..40}
+						do
+							(: < "/dev/tcp/127.0.0.1/$2") 2> /dev/null  &&  break
+							sleep 0.05
+						done
+						shift 2
+						exec "$0" "$@"
+						' "$agent_exec" "$ide_forwarder" "$JETBRAINS_MCP_PORT" "${agent_args[@]}")
+					agent_exec=bash
+				else
+					echo "Skipping JetBrains MCP: could not parse '$ide_config' (comments are not supported)." >&2
+					rm -f "$ide_config_copy"
+				fi
+				;;
+			agent-vibe)
+				ide_json=$(jq -nc --arg url "$ide_url" --arg host "$ide_host" --arg path "$CONTAINER_WORKSPACE" \
+					'[{name:"idea",transport:"streamable-http",url:$url,auth:{type:"static",
+					  headers:{Host:$host,IJ_MCP_SERVER_PROJECT_PATH:$path}}}]')
+				agent_env+=(--env "VIBE_MCP_SERVERS=$ide_json")
+				;;
+			agent-opencode)
+				ide_json=$(jq -nc --arg url "$ide_url" --arg host "$ide_host" --arg path "$CONTAINER_WORKSPACE" \
+					'{mcp:{servers:{idea:{type:"remote",url:$url,oauth:false,
+					  headers:{Host:$host,IJ_MCP_SERVER_PROJECT_PATH:$path}}}}}')
+				agent_env+=(--env "OPENCODE_CONFIG_CONTENT=$ide_json")
+				;;
+		esac
+	fi
 fi
 
 
@@ -854,6 +939,7 @@ case $agent_container in
 			--progress none                                                     \
 			"${volumes[@]}"                                                     \
 			--volume "$CONTAINERS_DIR/antigravity/!gemini:$AGENT_HOME/.gemini"  \
+			"${volumes_nested[@]}"                                              \
 			--workdir "$workdir"                                                \
 			--env LOCALHOST_DNS_ALIAS="$LOCALHOST_DNS_ALIAS"                    \
 			--env LOCALHOST_IP_ALIAS="$LOCALHOST_IP_ALIAS"                      \
