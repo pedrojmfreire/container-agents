@@ -139,6 +139,61 @@ CLEANUP_STOPPED_AGENTS()
 }
 
 
+# Add the SSH volumes for one agent to $volumes. Besides the agent's own key,
+# also map every key/certificate that its ~/.ssh/config-agent-<name> refers to
+# (IdentityFile and CertificateFile, in any Host/Match section), so that those
+# Host/Match sections work inside the container.
+# Usage: SSH_VOLUMES <name>
+SSH_VOLUMES()
+{
+	local name="$1"
+	local config="$HOME/.ssh/config-agent-$name"
+	local mapped=$'\n'  # Newline-delimited host paths already mapped
+	local file line keyword value ext
+
+	MAP_SSH_FILE()
+	{
+		[[ -f "$1" ]]  &&  [[ "$mapped" != *$'\n'"$1"$'\n'* ]]  ||  return 0
+		mapped+="$1"$'\n'
+		volumes+=(--volume "$1:$AGENT_HOME${1#"$HOME"}:ro")
+	}
+
+	volumes+=(
+		--volume "$config:$AGENT_HOME/.ssh/config:ro"
+		--volume "$HOME/.ssh/known_hosts_agents:$AGENT_HOME/.ssh/known_hosts:ro"
+	)
+
+	[[ -f "$config" ]]  ||  return 0
+
+	shopt -s nocasematch
+	while IFS= read -r line || [[ -n "$line" ]]
+	do
+		line="${line%$'\r'}"
+		[[ "$line" =~ ^[[:space:]]*(IdentityFile|CertificateFile)[[:space:]=]+(.*[^[:space:]])[[:space:]]*$ ]]  ||  continue
+		keyword="${BASH_REMATCH[1]}"
+		value="${BASH_REMATCH[2]}"
+		value="${value#\"}"
+		value="${value%\"}"
+
+		# Expand the tokens that ssh would expand to the same values inside the container
+		value="${value/#\~/$HOME}"
+		value="${value//%d/$HOME}"
+		value="${value//%u/$AGENT_USER}"
+		[[ "$value" == /* && "$value" != *%* ]]  ||  continue
+
+		MAP_SSH_FILE "$value"
+		if [[ "$keyword" == IdentityFile ]]
+		then
+			for ext in .pub -cert.pub
+			do
+				MAP_SSH_FILE "$value$ext"
+			done
+		fi
+	done < "$config"
+	shopt -u nocasematch
+}
+
+
 FILTER()
 {
 	jq -R -r --unbuffered --arg host "$LOCALHOST_DNS_ALIAS" --arg port "$JETBRAINS_MCP_PORT" '
@@ -314,9 +369,8 @@ do
 			echo "                    projects. ${aka:+"a.k.a. -a, --all."}"
 			echo "  ---sh             Run the container shell, not the agent itself."
 			echo "                    Must be defined after ---agent. ${aka:+"a.k.a. -s, --sh."}"
-			echo "  ---ssh            Map ~/.ssh/* files to allow the agent to access to servers/Virtual Machines. ${aka:+"a.k.a. --sh."}"
-			echo "                    Expects to find: ~/.ssh/ssh-agent-<agent>.pem, ~/.ssh/ssh-agent-<agent>.pem.pub,"
-			echo "                    ~/.ssh/config-agent-<agent>.pem and ~/.ssh/known_hosts_agents."
+			echo "  ---ssh            Map ~/.ssh/config-agent-<agent> to allow the agent access servers/Virtual Machines. ${aka:+"a.k.a. --sh."}"
+			echo "                    Will scan that config file to also map all key files and ~/.ssh/known_hosts_agents."
 			echo "  ---acp            Invoke the agent via ACP. Requires a prior ---local: ACP is incompatible with sudo."
 			echo "  ---local          Create a container DNS '$LOCALHOST_DNS_ALIAS' that maps to the host's localhost,"
 			echo "                    via $LOCALHOST_IP_ALIAS. Required to access Ollama, LM Studio, MTPLX models,"
@@ -859,15 +913,7 @@ case $agent_container in
 				volumes+=( --volume "$AI_SKILLS_DIR:$AGENT_HOME/.claude/skills" )
 			fi
 		fi
-		if $has_ssh_access
-		then
-			volumes+=(
-				--volume "$HOME/.ssh/ssh-agent-claude.pem:$AGENT_HOME/.ssh/ssh-agent-claude.pem:ro"
-				--volume "$HOME/.ssh/ssh-agent-claude.pem.pub:$AGENT_HOME/.ssh/ssh-agent-claude.pem.pub:ro"
-				--volume "$HOME/.ssh/config-agent-claude:$AGENT_HOME/.ssh/config:ro"
-				--volume "$HOME/.ssh/known_hosts_agents:$AGENT_HOME/.ssh/known_hosts:ro"
-				)
-		fi
+		$has_ssh_access  &&  SSH_VOLUMES claude
 		exec container run "${tty_args[@]}" --rm                                     \
 			--cpus 2 --memory 3G                                                     \
 			--progress none                                                          \
@@ -891,15 +937,7 @@ case $agent_container in
 		then
 			volumes+=( --volume "$AI_SKILLS_DIR:$AGENT_HOME/.agents/skills" )
 		fi
-		if $has_ssh_access
-		then
-			volumes+=(
-				--volume "$HOME/.ssh/ssh-agent-codex.pem:$AGENT_HOME/.ssh/ssh-agent-codex.pem:ro"
-				--volume "$HOME/.ssh/ssh-agent-codex.pem.pub:$AGENT_HOME/.ssh/ssh-agent-codex.pem.pub:ro"
-				--volume "$HOME/.ssh/config-agent-codex:$AGENT_HOME/.ssh/config:ro"
-				--volume "$HOME/.ssh/known_hosts_agents:$AGENT_HOME/.ssh/known_hosts:ro"
-				)
-		fi
+		$has_ssh_access  &&  SSH_VOLUMES codex
 		exec container run "${tty_args[@]}" --rm                        \
 			--cpus 2 --memory 2G                                        \
 			--progress none                                             \
@@ -925,15 +963,7 @@ case $agent_container in
 				volumes+=( --volume "$AI_SKILLS_DIR:$AGENT_HOME/.gemini/config/skills" )
 			fi
 		fi
-		if $has_ssh_access
-		then
-			volumes+=(
-				--volume "$HOME/.ssh/ssh-agent-gemini.pem:$AGENT_HOME/.ssh/ssh-agent-gemini.pem:ro"
-				--volume "$HOME/.ssh/ssh-agent-gemini.pem.pub:$AGENT_HOME/.ssh/ssh-agent-gemini.pem.pub:ro"
-				--volume "$HOME/.ssh/config-agent-gemini:$AGENT_HOME/.ssh/config:ro"
-				--volume "$HOME/.ssh/known_hosts_agents:$AGENT_HOME/.ssh/known_hosts:ro"
-				)
-		fi
+		$has_ssh_access  &&  SSH_VOLUMES gemini
 		exec container run "${tty_args[@]}" --rm                                \
 			--cpus 2 --memory 2G                                                \
 			--progress none                                                     \
@@ -960,15 +990,7 @@ case $agent_container in
 				volumes+=( --volume "$AI_SKILLS_DIR:$AGENT_HOME/.gemini/config/skills" )
 			fi
 		fi
-		if $has_ssh_access
-		then
-			volumes+=(
-				--volume "$HOME/.ssh/ssh-agent-gemini.pem:$AGENT_HOME/.ssh/ssh-agent-gemini.pem:ro"
-				--volume "$HOME/.ssh/ssh-agent-gemini.pem.pub:$AGENT_HOME/.ssh/ssh-agent-gemini.pem.pub:ro"
-				--volume "$HOME/.ssh/config-agent-gemini:$AGENT_HOME/.ssh/config:ro"
-				--volume "$HOME/.ssh/known_hosts_agents:$AGENT_HOME/.ssh/known_hosts:ro"
-				)
-		fi
+		$has_ssh_access  &&  SSH_VOLUMES gemini
 		exec container run "${tty_args[@]}" --rm                           \
 			--cpus 2 --memory 2G                                           \
 			--progress none                                                \
@@ -994,15 +1016,7 @@ case $agent_container in
 				volumes+=( --volume "$AI_SKILLS_DIR:$AGENT_HOME/.vibe/skills" )
 			fi
 		fi
-		if $has_ssh_access
-		then
-			volumes+=(
-				--volume "$HOME/.ssh/ssh-agent-vibe.pem:$AGENT_HOME/.ssh/ssh-agent-vibe.pem:ro"
-				--volume "$HOME/.ssh/ssh-agent-vibe.pem.pub:$AGENT_HOME/.ssh/ssh-agent-vibe.pem.pub:ro"
-				--volume "$HOME/.ssh/config-agent-vibe:$AGENT_HOME/.ssh/config:ro"
-				--volume "$HOME/.ssh/known_hosts_agents:$AGENT_HOME/.ssh/known_hosts:ro"
-				)
-		fi
+		$has_ssh_access  &&  SSH_VOLUMES vibe
 		exec container run "${tty_args[@]}" --rm                     \
 			--cpus 2 --memory 3G                                     \
 			--progress none                                          \
@@ -1024,15 +1038,7 @@ case $agent_container in
 		then
 			volumes+=( --volume "$AI_SKILLS_DIR:$AGENT_HOME/.agents/skills" )
 		fi
-		if $has_ssh_access
-		then
-			volumes+=(
-				--volume "$HOME/.ssh/ssh-agent-opencode.pem:$AGENT_HOME/.ssh/ssh-agent-opencode.pem:ro"
-				--volume "$HOME/.ssh/ssh-agent-opencode.pem.pub:$AGENT_HOME/.ssh/ssh-agent-opencode.pem.pub:ro"
-				--volume "$HOME/.ssh/config-agent-opencode:$AGENT_HOME/.ssh/config:ro"
-				--volume "$HOME/.ssh/known_hosts_agents:$AGENT_HOME/.ssh/known_hosts:ro"
-				)
-		fi
+		$has_ssh_access  &&  SSH_VOLUMES opencode
 		exec container run "${tty_args[@]}" --rm                             \
 			--cpus 2 --memory 3G                                             \
 			--progress none                                                  \
@@ -1052,15 +1058,7 @@ case $agent_container in
 		;;
 
 	"agent-n8n")
-		if $has_ssh_access
-		then
-			volumes+=(
-				--volume "$HOME/.ssh/ssh-agent-n8n.pem:$AGENT_HOME/.ssh/ssh-agent-n8n.pem:ro"
-				--volume "$HOME/.ssh/ssh-agent-n8n.pem.pub:$AGENT_HOME/.ssh/ssh-agent-n8n.pem.pub:ro"
-				--volume "$HOME/.ssh/config-agent-n8n:$AGENT_HOME/.ssh/config:ro"
-				--volume "$HOME/.ssh/known_hosts_agents:$AGENT_HOME/.ssh/known_hosts:ro"
-				)
-		fi
+		$has_ssh_access  &&  SSH_VOLUMES n8n
 		exec container run "${tty_args[@]}" --rm                  \
 			--cpus 2 --memory 3G                                  \
 			--progress none                                       \

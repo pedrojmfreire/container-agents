@@ -259,7 +259,8 @@ Options:
                     projects. 
   ---sh             Run the container shell, not the agent itself. 
                     Must be defined after ---agent.
-  ---ssh            Map ~/.ssh/* files to allow the agent to access to servers/Virtual Machines. 
+  ---ssh            Map ~/.ssh/config-agent-<agent> to allow the agent access servers/Virtual Machines.
+                    Will scan that config file to also map all key files and ~/.ssh/known_hosts_agents.
   ---acp            Invoke the agent via ACP. Requires a prior ---local: ACP is incompatible with sudo.
   ---local          Create a container DNS 'host.container.internal' that maps to the host's localhost,
                     via 203.0.113.113. Required to access Ollama, LM Studio, MTPLX models,
